@@ -1,0 +1,11 @@
+CLAUDE.md
+DESIGN.md
+PRODUCT.md
+skills-lock.json
+frontend/node_modules
+frontend/dist
+frontend-original
+frontend-vue-old
+.agents
+.claude
+.impeccable

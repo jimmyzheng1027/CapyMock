@@ -1,0 +1,276 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   Design Tokens — exact match with original
+   ============================================ */
+
+:root {
+  /* Color Palette */
+  --color-base:       #FFFCF7;
+  --color-surface:    #F8F5F0;
+  --color-surface-alt:#F1EDE6;
+  --color-primary:    #C4956A;
+  --color-primary-light: #D4AD8A;
+  --color-primary-dark:  #A87B54;
+  --color-secondary:  #A8B5A0;
+  --color-secondary-light: #C2CCBB;
+  --color-accent:     #E8937A;
+  --color-accent-light: #F0B0A0;
+  --color-ink:        #2D2A26;
+  --color-ink-light:  #5C574F;
+  --color-ink-muted:  #8A847B;
+  --color-border:     #E5E0D8;
+  --color-border-light:#EDE9E3;
+  --color-white:      #FFFFFF;
+
+  /* Typography */
+  --font-heading: 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif;
+  --font-body:    'Outfit', 'Noto Sans SC', sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Type Scale */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  1.875rem;
+  --text-4xl:  2.25rem;
+  --text-5xl:  3rem;
+  --text-6xl:  3.75rem;
+  --text-hero: clamp(2.5rem, 5vw, 4.5rem);
+
+  --leading-tight:  1.2;
+  --leading-normal: 1.6;
+  --leading-relaxed:1.75;
+
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* Spacing (8px base) */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* Border Radius */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm:   0 1px 3px rgba(45, 42, 38, 0.04);
+  --shadow-md:   0 4px 16px rgba(45, 42, 38, 0.06);
+  --shadow-lg:   0 8px 32px rgba(45, 42, 38, 0.08);
+  --shadow-xl:   0 16px 48px rgba(45, 42, 38, 0.10);
+  --shadow-glow: 0 0 0 4px rgba(196, 149, 106, 0.15);
+
+  /* Transitions */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast:   150ms;
+  --duration-normal: 250ms;
+  --duration-slow:   400ms;
+
+  /* Layout */
+  --max-width: 1200px;
+  --nav-height: 72px;
+}
+
+/* ---- Dark Mode ---- */
+.dark {
+  --color-base:       #0F0E0C;
+  --color-surface:    #1A1816;
+  --color-surface-alt:#242220;
+  --color-primary:    #D4AD8A;
+  --color-primary-light: #E0C4A8;
+  --color-primary-dark:  #C4956A;
+  --color-secondary:  #B8C5B0;
+  --color-secondary-light: #C2CCBB;
+  --color-accent:     #F0A890;
+  --color-accent-light: #F5C0B0;
+  --color-ink:        #F0ECE6;
+  --color-ink-light:  #C4BEB5;
+  --color-ink-muted:  #8A847B;
+  --color-border:     #333028;
+  --color-border-light:#2A2720;
+  --color-white:      #1A1816;
+
+  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md:   0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-xl:   0 16px 48px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 0 4px rgba(212, 173, 138, 0.2);
+}
+
+/* ---- Base Reset ---- */
+@layer base {
+  html {
+    font-family: var(--font-body);
+    font-size: 16px;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-base);
+    color: var(--color-ink);
+    transition: background 0.3s, color 0.3s;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: var(--leading-normal);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+    color: var(--color-ink);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img, svg {
+    display: block;
+    max-width: 100%;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+  }
+
+  input, textarea {
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  ::selection {
+    background: rgba(196, 149, 106, 0.25);
+  }
+}
+
+/* ---- Component Utilities ---- */
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--text-base);
+    font-weight: var(--weight-semibold);
+    border-radius: var(--radius-lg);
+    transition: all var(--duration-normal) var(--ease-out);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn--primary {
+    background: var(--color-primary);
+    color: var(--color-white);
+  }
+
+  .btn--primary:hover {
+    background: var(--color-primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(196, 149, 106, 0.3);
+  }
+
+  .btn--primary:active {
+    transform: translateY(0);
+  }
+
+  .btn--secondary {
+    background: transparent;
+    color: var(--color-ink);
+    border: 1.5px solid var(--color-border);
+  }
+
+  .btn--secondary:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateY(-2px);
+  }
+
+  .btn__icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 var(--space-6);
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: all 0.8s var(--ease-out);
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Loading dots */
+  .loading-dots span {
+    display: inline-block;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    animation: dot-blink 1.2s ease-in-out infinite;
+  }
+
+  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+}
+
+/* ---- Keyframes ---- */
+@keyframes dot-blink {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
