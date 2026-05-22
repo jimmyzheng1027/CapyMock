@@ -6,14 +6,12 @@ const { state, toggle } = useTheme()
 
 <template>
   <button
-    class="flex items-center justify-center transition-all"
+    class="flex items-center justify-center transition-all hover:bg-surface-alt hover:text-primary hover:rotate-12"
     :style="{
       width: '40px', height: '40px', borderRadius: 'var(--radius-full)',
       background: 'var(--color-surface)', border: '1px solid var(--color-border)',
       color: 'var(--color-ink-light)',
     }"
-    @mouseenter="$event.currentTarget.style.background='var(--color-surface-alt)'; $event.currentTarget.style.color='var(--color-primary)'; $event.currentTarget.style.transform='rotate(15deg)'"
-    @mouseleave="$event.currentTarget.style.background='var(--color-surface)'; $event.currentTarget.style.color='var(--color-ink-light)'; $event.currentTarget.style.transform=''"
     @click="toggle"
     aria-label="切换深色模式"
   >

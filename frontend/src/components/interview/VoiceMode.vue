@@ -1,43 +1,42 @@
 <script setup>
-import { ref, computed, onUnmounted, nextTick } from 'vue'
-import { api } from '@/api/index.js'
-import { interviewQuestions } from '@/api/mock.js'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { interviewQuestions } from '@/data/interviewQuestions.js'
+import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
+import { INTERVIEW_TYPES } from '@/constants/interview.js'
 
 const props = defineProps({
   interviewType: { type: String, default: 'technical' },
+  autoStart: { type: Boolean, default: false },
+  paused: { type: Boolean, default: false }
 })
+
+const emit = defineEmits(['update:transcript', 'voice-started', 'voice-stopped'])
 
 const voiceRunning = ref(false)
 const isMuted = ref(false)
 const isListening = ref(false)
 const elapsed = ref(0)
-const supported = ref(true)
+const supported = typeof window !== 'undefined'
+  ? !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  : false
 const statusText = ref('等待开始')
-const hintText = ref('选择面试类型后点击开始')
+const hintText = ref(supported ? '选择面试类型后点击开始' : '当前浏览器不支持语音识别，请使用 Chrome')
 const avatarSpeaking = ref(false)
 const transcriptEntries = ref([])
 const liveText = ref('')
 const liveIsFinal = ref(false)
 const waveformActive = ref(false)
+const transcriptContainer = ref(null)
 
 let recognition = null
 let timer = null
 let questionIndex = 0
 let conversationHistory = []
+let pendingTimeouts = []
 
 const SpeechRecognition = typeof window !== 'undefined'
   ? window.SpeechRecognition || window.webkitSpeechRecognition
   : null
-
-if (!SpeechRecognition) {
-  supported.value = false
-  hintText.value = '当前浏览器不支持语音识别，请使用 Chrome'
-}
-
-const voiceTypeNames = { technical: '技术面试', behavioral: '行为面试', hr: 'HR 面试' }
-const voiceTypes = ['technical', 'behavioral', 'hr']
-let voiceTypeIndex = 0
-const currentVoiceType = ref(props.interviewType)
 
 const formattedTime = computed(() => {
   const m = Math.floor(elapsed.value / 60)
@@ -45,12 +44,28 @@ const formattedTime = computed(() => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 })
 
+function addTimeout(fn, delay) {
+  const id = setTimeout(() => {
+    pendingTimeouts = pendingTimeouts.filter(t => t !== id)
+    fn()
+  }, delay)
+  pendingTimeouts.push(id)
+  return id
+}
+
+function clearAllTimeouts() {
+  pendingTimeouts.forEach(id => clearTimeout(id))
+  pendingTimeouts = []
+}
+
 function addTranscript(label, text) {
   transcriptEntries.value.push({ label, text })
   nextTick(() => {
-    const el = document.querySelector('.voice-transcript')
-    if (el) el.scrollTop = el.scrollHeight
+    if (transcriptContainer.value) {
+      transcriptContainer.value.scrollTop = transcriptContainer.value.scrollHeight
+    }
   })
+  emit('update:transcript', transcriptEntries.value)
 }
 
 function startVoice() {
@@ -68,32 +83,33 @@ function startVoice() {
 
   timer = setInterval(() => elapsed.value++, 1000)
 
-  // Show initial AI question
   const firstQ = getFirstQuestion()
   avatarSpeaking.value = true
-  hintText.value = 'AI 面试官正在提问...'
-  setTimeout(() => {
-    addTranscript('AI 面试官', firstQ)
+  hintText.value = 'Capy正在提问...'
+  addTimeout(() => {
+    addTranscript('Capy', firstQ)
     conversationHistory.push({ role: 'assistant', content: firstQ })
     avatarSpeaking.value = false
     hintText.value = '请回答...'
     startListening()
   }, 1200)
+
+  emit('voice-started')
 }
 
 function getFirstQuestion() {
-  const qs = interviewQuestions[currentVoiceType.value] || interviewQuestions.technical
+  const qs = interviewQuestions[props.interviewType] || interviewQuestions.technical
   return qs[0]
 }
 
 function getNextAIResponse() {
-  const qs = interviewQuestions[currentVoiceType.value] || interviewQuestions.technical
+  const qs = interviewQuestions[props.interviewType] || interviewQuestions.technical
   questionIndex = (questionIndex + 1) % qs.length
   return qs[questionIndex]
 }
 
 function startListening() {
-  if (!SpeechRecognition || !voiceRunning.value || isMuted.value) return
+  if (!SpeechRecognition || !voiceRunning.value || isMuted.value || props.paused) return
 
   try {
     recognition = new SpeechRecognition()
@@ -132,29 +148,26 @@ function startListening() {
       waveformActive.value = false
 
       if (finalTranscript.trim() && voiceRunning.value) {
-        // Add user message to transcript
         addTranscript('你', finalTranscript.trim())
         conversationHistory.push({ role: 'user', content: finalTranscript.trim() })
         liveText.value = ''
 
-        // AI thinks then responds
-        hintText.value = 'AI 面试官正在思考...'
+        hintText.value = 'Capy正在思考...'
         avatarSpeaking.value = true
 
-        setTimeout(() => {
+        addTimeout(() => {
           const aiResponse = getNextAIResponse()
-          addTranscript('AI 面试官', aiResponse)
+          addTranscript('Capy', aiResponse)
           conversationHistory.push({ role: 'assistant', content: aiResponse })
           avatarSpeaking.value = false
           hintText.value = '请回答...'
 
-          // Continue listening
-          if (voiceRunning.value && !isMuted.value) {
-            setTimeout(() => startListening(), 500)
+          if (voiceRunning.value && !isMuted.value && !props.paused) {
+            addTimeout(() => startListening(), 500)
           }
         }, 1500)
-      } else if (voiceRunning.value && !isMuted.value) {
-        setTimeout(() => startListening(), 300)
+      } else if (voiceRunning.value && !isMuted.value && !props.paused) {
+        addTimeout(() => startListening(), 300)
       }
     }
 
@@ -162,12 +175,15 @@ function startListening() {
       isListening.value = false
       waveformActive.value = false
 
-      if (event.error === 'not-allowed') {
-        hintText.value = '请允许麦克风权限后重试'
-      } else if (event.error === 'no-speech') {
-        hintText.value = '未检测到语音，请再试一次'
-        if (voiceRunning.value && !isMuted.value) {
-          setTimeout(() => startListening(), 1000)
+      const errorMessages = {
+        'not-allowed': '请允许麦克风权限后重试',
+        'no-speech': '未检测到语音，请再试一次',
+      }
+
+      if (errorMessages[event.error]) {
+        hintText.value = errorMessages[event.error]
+        if (event.error === 'no-speech' && voiceRunning.value && !isMuted.value && !props.paused) {
+          addTimeout(() => startListening(), 1000)
         }
       } else if (event.error !== 'aborted') {
         hintText.value = `识别出错: ${event.error}`
@@ -194,6 +210,8 @@ function stopVoice() {
     try { recognition.abort() } catch {}
     recognition = null
   }
+
+  emit('voice-stopped', transcriptEntries.value)
 }
 
 function toggleMute() {
@@ -208,17 +226,11 @@ function toggleMute() {
     avatarSpeaking.value = false
     hintText.value = '已静音'
   } else {
-    if (voiceRunning.value) {
+    if (voiceRunning.value && !props.paused) {
       hintText.value = '取消静音，正在监听...'
       startListening()
     }
   }
-}
-
-function cycleVoiceType() {
-  voiceTypeIndex = (voiceTypeIndex + 1) % voiceTypes.length
-  currentVoiceType.value = voiceTypes[voiceTypeIndex]
-  hintText.value = `当前类型：${voiceTypeNames[currentVoiceType.value]}`
 }
 
 function toggleVoice() {
@@ -229,7 +241,41 @@ function toggleVoice() {
   }
 }
 
+function getTranscript() {
+  return transcriptEntries.value
+}
+
+function clearTranscript() {
+  transcriptEntries.value = []
+  emit('update:transcript', transcriptEntries.value)
+}
+
+defineExpose({ getTranscript, clearTranscript })
+
+watch(() => props.paused, (paused) => {
+  if (paused && voiceRunning.value) {
+    if (recognition) {
+      try { recognition.abort() } catch {}
+      recognition = null
+    }
+    isListening.value = false
+    waveformActive.value = false
+    avatarSpeaking.value = false
+    hintText.value = '面试已暂停'
+  } else if (!paused && voiceRunning.value) {
+    hintText.value = '请回答...'
+    startListening()
+  }
+})
+
+onMounted(() => {
+  if (props.autoStart) {
+    startVoice()
+  }
+})
+
 onUnmounted(() => {
+  clearAllTimeouts()
   clearInterval(timer)
   if (recognition) {
     try { recognition.abort() } catch {}
@@ -240,51 +286,38 @@ onUnmounted(() => {
 <template>
   <div class="voice-page">
     <div class="voice-container">
-      <!-- Status badge -->
       <div class="voice-status" :class="voiceRunning ? 'active' : ''">
         <span class="voice-status__dot"></span>
         <span>{{ statusText }}</span>
       </div>
 
-      <!-- Avatar -->
       <div class="voice-avatar" :class="avatarSpeaking ? 'speaking' : ''">
         <div class="voice-avatar__ring"></div>
         <div class="voice-avatar__ring voice-avatar__ring--2"></div>
         <div class="voice-avatar__face">
-          <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-            <path d="M32 8 C16 8, 8 18, 8 32 C8 46, 16 56, 32 56 C48 56, 56 46, 56 32 C56 18, 48 8, 32 8 Z" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-            <path d="M18 14 C16 6, 22 4, 24 10" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-            <path d="M40 10 C38 2, 44 0, 46 8" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-            <circle cx="24" cy="28" r="3" fill="var(--color-primary)"/>
-            <circle cx="40" cy="28" r="3" fill="var(--color-primary)"/>
-            <path d="M32 34 L32 42" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round"/>
-            <path d="M26 42 Q32 50 38 42" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-          </svg>
+          <CapybaraLogo :size="64" :stroke-width="2.5" />
         </div>
       </div>
 
-      <!-- Name & hint -->
-      <h2 class="voice-name" style="font-family: var(--font-heading)">AI 面试官</h2>
+      <h2 class="voice-name" style="font-family: var(--font-heading)">Capy</h2>
       <p class="voice-hint">{{ hintText }}</p>
 
-      <!-- Waveform -->
       <div class="voice-waveform" :class="waveformActive ? 'active' : ''">
         <span v-for="n in 20" :key="n"></span>
       </div>
 
-      <!-- Transcript area -->
-      <div class="voice-transcript">
+      <div ref="transcriptContainer" class="voice-transcript">
         <template v-if="transcriptEntries.length || liveText">
           <div
             v-for="(entry, i) in transcriptEntries"
             :key="i"
             class="voice-transcript__entry"
+            :class="entry.label === '你' ? 'voice-transcript__entry--user' : 'voice-transcript__entry--ai'"
           >
             <span class="transcript-label">{{ entry.label }}</span>
             <p>{{ entry.text }}</p>
           </div>
-          <!-- Live speech recognition -->
-          <div v-if="liveText" class="voice-transcript__live">
+          <div v-if="liveText" class="voice-transcript__live voice-transcript__entry--user">
             <span class="transcript-label">你（识别中...）</span>
             <p :style="{ opacity: liveIsFinal ? 0.5 : 1 }">{{ liveText }}</p>
           </div>
@@ -292,23 +325,7 @@ onUnmounted(() => {
         <p v-else class="voice-transcript__placeholder">对话记录将显示在这里...</p>
       </div>
 
-      <!-- Controls -->
       <div class="voice-controls">
-        <!-- Type switcher (left) -->
-        <button
-          class="voice-ctrl voice-ctrl--secondary"
-          :title="'当前: ' + voiceTypeNames[currentVoiceType]"
-          @click="cycleVoiceType"
-        >
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <rect x="3" y="3" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="12" y="3" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="3" y="12" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="12" y="12" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </button>
-
-        <!-- Primary start/stop (center) -->
         <button
           v-if="!voiceRunning"
           class="voice-ctrl voice-ctrl--primary"
@@ -332,7 +349,6 @@ onUnmounted(() => {
           </svg>
         </button>
 
-        <!-- Mute (right) -->
         <button
           class="voice-ctrl voice-ctrl--secondary"
           :class="isMuted ? 'muted' : ''"
@@ -346,7 +362,6 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Timer -->
       <div class="voice-timer">{{ formattedTime }}</div>
     </div>
   </div>
@@ -357,8 +372,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  padding-top: var(--nav-height);
+  height: 100%;
+  padding: var(--space-8);
 }
 
 .voice-container {
@@ -377,7 +392,6 @@ onUnmounted(() => {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Status badge */
 .voice-status {
   display: inline-flex;
   align-items: center;
@@ -414,7 +428,6 @@ onUnmounted(() => {
   50% { opacity: 0.5; }
 }
 
-/* Avatar */
 .voice-avatar {
   position: relative;
   width: 120px;
@@ -472,7 +485,6 @@ onUnmounted(() => {
   color: var(--color-ink-muted);
 }
 
-/* Waveform */
 .voice-waveform {
   display: flex;
   align-items: center;
@@ -524,7 +536,6 @@ onUnmounted(() => {
   100% { height: 36px; }
 }
 
-/* Transcript */
 .voice-transcript {
   width: 100%;
   max-width: 480px;
@@ -562,6 +573,18 @@ onUnmounted(() => {
   margin: 0;
 }
 
+.voice-transcript__entry--ai {
+  text-align: left;
+}
+
+.voice-transcript__entry--user {
+  text-align: right;
+}
+
+.voice-transcript__entry--user .transcript-label {
+  color: var(--color-ink-muted);
+}
+
 .transcript-label {
   font-size: var(--text-xs);
   font-weight: 600;
@@ -582,7 +605,6 @@ onUnmounted(() => {
   margin: 0;
 }
 
-/* Controls */
 .voice-controls {
   display: flex;
   align-items: center;
@@ -643,12 +665,16 @@ onUnmounted(() => {
   border-color: #EF4444;
 }
 
-/* Timer */
 .voice-timer {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--color-ink-muted);
   letter-spacing: 0.05em;
+}
+
+:global(.dark) .voice-avatar__face {
+  background: var(--color-surface);
+  border-color: var(--color-border);
 }
 
 @media (max-width: 768px) {

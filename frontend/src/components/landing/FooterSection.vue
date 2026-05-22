@@ -14,9 +14,9 @@
         <span class="text-sm" style="color: var(--color-ink-muted)">&copy; 2026 CapyMock. Made with care.</span>
       </div>
       <ul class="flex gap-6 list-none m-0 p-0">
-        <li><a href="#" class="text-sm transition-colors" style="color: var(--color-ink-muted)" @mouseenter="$event.target.style.color='var(--color-primary)'" @mouseleave="$event.target.style.color='var(--color-ink-muted)'">关于我们</a></li>
-        <li><a href="#" class="text-sm transition-colors" style="color: var(--color-ink-muted)" @mouseenter="$event.target.style.color='var(--color-primary)'" @mouseleave="$event.target.style.color='var(--color-ink-muted)'">隐私政策</a></li>
-        <li><a href="#" class="text-sm transition-colors" style="color: var(--color-ink-muted)" @mouseenter="$event.target.style.color='var(--color-primary)'" @mouseleave="$event.target.style.color='var(--color-ink-muted)'">联系方式</a></li>
+        <li><a href="#" class="text-sm transition-colors hover:text-primary" style="color: var(--color-ink-muted)">关于我们</a></li>
+        <li><a href="#" class="text-sm transition-colors hover:text-primary" style="color: var(--color-ink-muted)">隐私政策</a></li>
+        <li><a href="#" class="text-sm transition-colors hover:text-primary" style="color: var(--color-ink-muted)">联系方式</a></li>
       </ul>
     </div>
   </footer>

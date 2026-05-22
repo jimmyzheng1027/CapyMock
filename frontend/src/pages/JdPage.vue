@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import AnalysisLayout from '@/layouts/AnalysisLayout.vue'
 import ScoreRing from '@/components/common/ScoreRing.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import ResultsHeader from '@/components/common/ResultsHeader.vue'
+import SectionCard from '@/components/common/SectionCard.vue'
 import { api } from '@/api/index.js'
 
 const jdInput = ref('')
@@ -68,52 +70,31 @@ function retry() {
 
     <!-- Results -->
     <div v-if="results" class="animate-fade-in">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-xl font-bold">JD 分析报告</h3>
-        <button class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border border-border dark:border-border bg-white dark:bg-surface text-ink-light hover:border-primary hover:text-primary transition-theme" @click="retry">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7a6 6 0 1 1 1.8 4.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M1 11V7h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          重新分析
-        </button>
-      </div>
+      <ResultsHeader title="JD 分析报告" @retry="retry" />
 
       <ScoreRing :score="results.score" label="岗位匹配难度" :summary="results.summary" />
 
-      <!-- Requirements -->
-      <div class="mt-6 bg-white dark:bg-surface border border-border-light dark:border-border rounded-xl p-6">
-        <div class="flex items-center gap-2 mb-4 font-semibold">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="text-primary"><rect x="2" y="2" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.3"/><path d="M6 8l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          核心要求拆解
-        </div>
+      <SectionCard icon="list" title="核心要求拆解" class="mt-6">
         <ul class="pl-5 m-0 text-sm text-ink-light leading-relaxed">
           <li v-for="(r, i) in results.requirements" :key="i" class="mb-2 marker:text-primary">
             <strong class="text-ink">{{ r.label }}：</strong>{{ r.text }}
           </li>
         </ul>
-      </div>
+      </SectionCard>
 
-      <!-- Implicit -->
-      <div class="mt-4 bg-white dark:bg-surface border border-border-light dark:border-border rounded-xl p-6">
-        <div class="flex items-center gap-2 mb-4 font-semibold">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="text-primary"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.3"/><path d="M9 6v4M9 12v0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          隐含期望分析
-        </div>
+      <SectionCard icon="info" title="隐含期望分析" class="mt-4">
         <ul class="pl-5 m-0 text-sm text-ink-light leading-relaxed">
           <li v-for="(item, i) in results.implicit" :key="i" class="mb-2 marker:text-primary">
             <strong class="text-ink">{{ item.label }}：</strong>{{ item.text }}
           </li>
         </ul>
-      </div>
+      </SectionCard>
 
-      <!-- Suggestions -->
-      <div class="mt-4 bg-white dark:bg-surface border border-border-light dark:border-border rounded-xl p-6">
-        <div class="flex items-center gap-2 mb-4 font-semibold">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="text-primary"><path d="M2 9h14M9 2v14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-          针对性准备建议
-        </div>
+      <SectionCard icon="plus" title="针对性准备建议" class="mt-4">
         <ul class="pl-5 m-0 text-sm text-ink-light leading-relaxed">
           <li v-for="(s, i) in results.suggestions" :key="i" class="mb-2 marker:text-primary">{{ s }}</li>
         </ul>
-      </div>
+      </SectionCard>
     </div>
 
     <LoadingOverlay

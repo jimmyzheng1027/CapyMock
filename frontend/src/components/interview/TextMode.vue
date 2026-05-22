@@ -1,12 +1,15 @@
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted, watch } from 'vue'
 import { api } from '@/api/index.js'
+import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
 
 const props = defineProps({
   interviewType: { type: String, default: 'technical' },
+  autoStart: { type: Boolean, default: false },
+  paused: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:type'])
+const emit = defineEmits(['update:type', 'update:messages', 'interview-started', 'interview-ended'])
 
 const messages = ref([])
 const started = ref(false)
@@ -26,6 +29,7 @@ function startInterview(type) {
   started.value = true
   messages.value = []
   addAIMessage(getFirstQuestion(type))
+  emit('interview-started')
 }
 
 function getFirstQuestion(type) {
@@ -43,16 +47,18 @@ async function addAIMessage(content) {
   messages.value.push({ role: 'ai', content })
   aiTyping.value = false
   scrollToBottom()
+  emit('update:messages', messages.value)
 }
 
 function addUserMessage(content) {
   messages.value.push({ role: 'user', content })
   scrollToBottom()
+  emit('update:messages', messages.value)
 }
 
 async function sendMessage() {
   const text = inputText.value.trim()
-  if (!text || aiTyping.value) return
+  if (!text || aiTyping.value || props.paused) return
   inputText.value = ''
   if (textareaRef.value) textareaRef.value.style.height = 'auto'
   addUserMessage(text)
@@ -83,13 +89,28 @@ function onKeydown(e) {
     sendMessage()
   }
 }
+
+function getMessages() {
+  return messages.value
+}
+
+function clearMessages() {
+  messages.value = []
+  emit('update:messages', messages.value)
+}
+
+defineExpose({ getMessages, clearMessages })
+
+onMounted(() => {
+  if (props.autoStart) {
+    startInterview(props.interviewType)
+  }
+})
 </script>
 
 <template>
-  <!-- Welcome Screen -->
-  <div v-if="!started" class="interview-page">
+  <div v-if="!started && !autoStart" class="interview-page">
     <div class="chat-welcome">
-      <!-- Capybara illustration -->
       <svg width="80" height="80" viewBox="0 0 120 120" fill="none" style="margin-bottom: var(--space-6)">
         <path d="M60 95 C25 95, 8 75, 12 55 C15 40, 30 25, 60 22 C90 25, 105 40, 108 55 C112 75, 95 95, 60 95 Z" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         <path d="M35 28 C32 18, 42 15, 44 24" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
@@ -105,7 +126,7 @@ function onKeydown(e) {
 
       <h2 class="chat-welcome__title" style="font-family: var(--font-heading)">准备好了吗？</h2>
       <p class="chat-welcome__desc">
-        AI 面试官会根据你的简历和目标岗位进行个性化提问。<br>
+        Capy会根据你的简历和目标岗位进行个性化提问。<br>
         选择下方的面试类型开始吧。
       </p>
 
@@ -139,9 +160,7 @@ function onKeydown(e) {
     </div>
   </div>
 
-  <!-- Chat Interface -->
   <div v-else class="interview-page">
-    <!-- Messages -->
     <div ref="chatContainer" class="chat-area">
       <div class="chat-messages">
         <div
@@ -151,17 +170,12 @@ function onKeydown(e) {
           :class="msg.role === 'user' ? 'chat-bubble--user' : 'chat-bubble--ai'"
         >
           <div v-if="msg.role === 'ai'" class="bubble-header">
-            <svg viewBox="0 0 14 14" fill="none" width="14" height="14">
-              <path d="M7 2 C4 2, 2 4, 2 7 C2 10, 4 12, 7 12 C10 12, 12 10, 12 7 C12 4, 10 2, 7 2 Z" stroke="currentColor" stroke-width="1.2"/>
-              <circle cx="5.5" cy="6.5" r="0.8" fill="currentColor"/>
-              <circle cx="8.5" cy="6.5" r="0.8" fill="currentColor"/>
-            </svg>
-            AI 面试官
+            <CapybaraLogo :size="16" :stroke-width="2" />
+            Capy
           </div>
           {{ msg.content }}
         </div>
 
-        <!-- Typing indicator -->
         <div v-if="aiTyping" class="typing-indicator">
           <span></span>
           <span></span>
@@ -170,22 +184,22 @@ function onKeydown(e) {
       </div>
     </div>
 
-    <!-- Input -->
     <div class="chat-input-area">
       <div class="chat-input-wrap">
         <textarea
           ref="textareaRef"
           v-model="inputText"
           class="chat-input"
-          placeholder="输入你的回答..."
+          :placeholder="paused ? '面试已暂停...' : '输入你的回答...'"
           rows="1"
+          :disabled="paused"
           @input="autoResize"
           @keydown="onKeydown"
         ></textarea>
         <button
           class="chat-send"
-          :class="{ 'opacity-50 cursor-not-allowed': !inputText.trim() || aiTyping }"
-          :disabled="!inputText.trim() || aiTyping"
+          :class="{ 'opacity-50 cursor-not-allowed': !inputText.trim() || aiTyping || paused }"
+          :disabled="!inputText.trim() || aiTyping || paused"
           @click="sendMessage"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -203,7 +217,9 @@ function onKeydown(e) {
 .interview-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--nav-height));
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Welcome */
@@ -288,7 +304,6 @@ function onKeydown(e) {
   color: var(--color-ink-muted);
 }
 
-/* Chat area */
 .chat-area {
   flex: 1;
   overflow-y: auto;
@@ -311,7 +326,6 @@ function onKeydown(e) {
   border-radius: 2px;
 }
 
-/* Messages */
 .chat-messages {
   max-width: 720px;
   width: 100%;
@@ -361,7 +375,6 @@ function onKeydown(e) {
   color: var(--color-primary);
 }
 
-/* Typing indicator */
 .typing-indicator {
   display: flex;
   gap: 4px;
@@ -389,8 +402,8 @@ function onKeydown(e) {
   30% { transform: translateY(-6px); opacity: 1; }
 }
 
-/* Input area */
 .chat-input-area {
+  flex-shrink: 0;
   padding: var(--space-4) var(--space-6) var(--space-6);
   background: linear-gradient(to top, var(--color-base) 60%, transparent);
 }
@@ -430,6 +443,11 @@ function onKeydown(e) {
   color: var(--color-ink-muted);
 }
 
+.chat-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .chat-send {
   width: 40px;
   height: 40px;
@@ -443,12 +461,12 @@ function onKeydown(e) {
   transition: all var(--duration-fast) var(--ease-out);
 }
 
-.chat-send:hover {
+.chat-send:hover:not(:disabled) {
   background: var(--color-primary-dark);
   transform: scale(1.05);
 }
 
-.chat-send:active {
+.chat-send:active:not(:disabled) {
   transform: scale(0.95);
 }
 
@@ -461,7 +479,6 @@ function onKeydown(e) {
   opacity: 0.6;
 }
 
-/* Dark mode overrides */
 :global(.dark) .welcome-option {
   background: var(--color-surface);
   border-color: var(--color-border);

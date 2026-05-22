@@ -5,19 +5,12 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import TextMode from '@/components/interview/TextMode.vue'
 import VoiceMode from '@/components/interview/VoiceMode.vue'
 import SettingsPanel from '@/components/interview/SettingsPanel.vue'
+import { useScrollState } from '@/composables/useScrollState.js'
 
 const mode = ref('text')
 const interviewType = ref('technical')
 const settingsOpen = ref(false)
-const scrolled = ref(false)
-
-function onScroll() {
-  scrolled.value = window.scrollY > 10
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('scroll', onScroll, { passive: true })
-}
+const { scrolled } = useScrollState()
 
 const sliderStyle = computed(() => ({
   transform: mode.value === 'voice' ? 'translateX(100%)' : 'translateX(0)',
@@ -42,10 +35,8 @@ const sliderStyle = computed(() => ({
         <div class="flex items-center gap-3">
           <router-link
             to="/"
-            class="flex items-center justify-center transition-all"
+            class="flex items-center justify-center transition-all hover:bg-surface hover:text-primary"
             style="width: 36px; height: 36px; border-radius: var(--radius-full); color: var(--color-ink-light)"
-            @mouseenter="$event.currentTarget.style.background='var(--color-surface)'; $event.currentTarget.style.color='var(--color-primary)'"
-            @mouseleave="$event.currentTarget.style.background='transparent'; $event.currentTarget.style.color='var(--color-ink-light)'"
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </router-link>
@@ -113,10 +104,8 @@ const sliderStyle = computed(() => ({
         <!-- Right -->
         <div class="flex items-center gap-2">
           <button
-            class="flex items-center justify-center transition-all"
+            class="flex items-center justify-center transition-all hover:bg-surface hover:text-primary"
             style="width: 40px; height: 40px; border-radius: var(--radius-full); color: var(--color-ink-light)"
-            @mouseenter="$event.currentTarget.style.background='var(--color-surface)'; $event.currentTarget.style.color='var(--color-primary)'"
-            @mouseleave="$event.currentTarget.style.background='transparent'; $event.currentTarget.style.color='var(--color-ink-light)'"
             @click="settingsOpen = true"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -139,9 +128,3 @@ const sliderStyle = computed(() => ({
     <SettingsPanel :open="settingsOpen" @close="settingsOpen = false" />
   </div>
 </template>
-
-<style>
-.dark .topbar-glass {
-  background: rgba(15, 14, 12, 0.85) !important;
-}
-</style>

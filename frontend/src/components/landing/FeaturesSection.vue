@@ -54,18 +54,15 @@ const features = [
         <div
           v-for="(f, i) in features"
           :key="i"
-          class="reveal relative cursor-pointer overflow-hidden transition-all"
+          class="reveal relative cursor-pointer overflow-hidden transition-all border border-border-light hover:-translate-y-1.5 hover:shadow-lg hover:border-primary-light"
           :style="{
             transitionDelay: `${i * 0.1}s`,
             background: 'var(--color-white)',
             borderRadius: 'var(--radius-xl)',
             padding: '2rem',
-            border: '1px solid var(--color-border-light)',
             transitionDuration: 'var(--duration-slow)',
             transitionTimingFunction: 'var(--ease-out)',
           }"
-          @mouseenter="$event.currentTarget.style.transform='translateY(-6px)'; $event.currentTarget.style.boxShadow='var(--shadow-lg)'; $event.currentTarget.style.borderColor='var(--color-primary-light)'"
-          @mouseleave="$event.currentTarget.style.transform=''; $event.currentTarget.style.boxShadow=''; $event.currentTarget.style.borderColor='var(--color-border-light)'"
           @click="router.push(f.route)"
         >
           <!-- Icon -->

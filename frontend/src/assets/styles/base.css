@@ -178,6 +178,12 @@
   }
 }
 
+/* ---- Global Component Overrides ---- */
+.dark .nav-glass,
+.dark .topbar-glass {
+  background: rgba(15, 14, 12, 0.85) !important;
+}
+
 /* ---- Component Utilities ---- */
 @layer components {
   .btn {

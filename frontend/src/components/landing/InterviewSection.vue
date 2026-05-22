@@ -1,5 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
 
 const router = useRouter()
 </script>
@@ -26,17 +27,14 @@ const router = useRouter()
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-[1000px] mx-auto">
         <!-- Text mode card -->
         <div
-          class="reveal relative overflow-hidden cursor-pointer transition-all"
+          class="reveal relative overflow-hidden cursor-pointer transition-all border border-border-light hover:-translate-y-1 hover:shadow-lg"
           :style="{
             background: 'var(--color-white)',
             borderRadius: 'var(--radius-xl)',
             padding: '2.5rem',
-            border: '1px solid var(--color-border-light)',
             transitionDuration: 'var(--duration-slow)',
             transitionTimingFunction: 'var(--ease-out)',
           }"
-          @mouseenter="$event.currentTarget.style.transform='translateY(-4px)'; $event.currentTarget.style.boxShadow='var(--shadow-lg)'"
-          @mouseleave="$event.currentTarget.style.transform=''; $event.currentTarget.style.boxShadow=''"
           @click="router.push('/interview')"
         >
           <!-- Mode badge -->
@@ -105,15 +103,7 @@ const router = useRouter()
             <div class="flex flex-col items-center gap-4">
               <!-- Avatar -->
               <div class="w-14 h-14 rounded-full flex items-center justify-center relative" style="background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary))">
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                  <path d="M14 3 C7 3, 3 8, 3 14 C3 20, 7 25, 14 25 C21 25, 25 20, 25 14 C25 8, 21 3, 14 3 Z" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-                  <path d="M8 5 C7 2, 10 1, 11 4" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-                  <path d="M17 4 C16 1, 19 0, 20 3" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-                  <circle cx="10" cy="12" r="1.8" fill="white"/>
-                  <circle cx="18" cy="12" r="1.8" fill="white"/>
-                  <path d="M14 15 L14 18" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-                  <path d="M11 18 Q14 21 17 18" stroke="white" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-                </svg>
+                <CapybaraLogo :size="28" color="white" :stroke-width="2" />
               </div>
 
               <!-- Wave bars -->

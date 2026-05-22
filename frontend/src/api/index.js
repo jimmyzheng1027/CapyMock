@@ -31,6 +31,18 @@ export const api = {
     })
   },
 
+  getGithubRepos() {
+    return request('/analysis/github/repos')
+  },
+
+  getGithubRepo(id) {
+    return request(`/analysis/github/repos/${id}`)
+  },
+
+  getGithubDeep(id) {
+    return request(`/analysis/github/repos/${id}/deep`)
+  },
+
   // JD analysis
   analyzeJd(text) {
     return request('/analysis/jd', {

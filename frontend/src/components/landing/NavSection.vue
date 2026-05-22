@@ -1,16 +1,9 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
 import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
+import { useScrollState } from '@/composables/useScrollState.js'
 
-const scrolled = ref(false)
-
-function onScroll() {
-  scrolled.value = window.scrollY > 10
-}
-
-onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
-onUnmounted(() => window.removeEventListener('scroll', onScroll))
+const { scrolled } = useScrollState()
 </script>
 
 <template>
@@ -29,10 +22,10 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
       <!-- Nav links -->
       <ul class="hidden md:flex items-center gap-8 list-none m-0 p-0">
         <li>
-          <a href="#features" class="text-sm font-medium transition-colors relative" style="color: var(--color-ink-light)" @mouseenter="$event.target.style.color='var(--color-primary)'" @mouseleave="$event.target.style.color='var(--color-ink-light)'">智能分析</a>
+          <a href="#features" class="text-sm font-medium transition-colors relative hover:text-primary" style="color: var(--color-ink-light)">智能分析</a>
         </li>
         <li>
-          <a href="#interview" class="text-sm font-medium transition-colors relative" style="color: var(--color-ink-light)" @mouseenter="$event.target.style.color='var(--color-primary)'" @mouseleave="$event.target.style.color='var(--color-ink-light)'">模拟面试</a>
+          <a href="#interview" class="text-sm font-medium transition-colors relative hover:text-primary" style="color: var(--color-ink-light)">模拟面试</a>
         </li>
       </ul>
 
@@ -50,9 +43,3 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
     </div>
   </nav>
 </template>
-
-<style>
-.dark .nav-glass {
-  background: rgba(15, 14, 12, 0.85) !important;
-}
-</style>

@@ -9,15 +9,31 @@ const routes = [
   },
   {
     path: '/interview',
-    name: 'interview',
-    component: () => import('@/pages/InterviewPage.vue'),
+    name: 'interview-list',
+    component: () => import('@/pages/InterviewListPage.vue'),
+    meta: { title: '模拟面试 — CapyMock' },
+  },
+  {
+    path: '/interview/config',
+    name: 'interview-config',
+    component: () => import('@/pages/InterviewConfigPage.vue'),
+    meta: { title: '面试配置 — CapyMock' },
+  },
+  {
+    path: '/interview/:id',
+    name: 'interview-session',
+    component: () => import('@/pages/InterviewSessionPage.vue'),
     meta: { title: '模拟面试 — CapyMock' },
   },
   {
     path: '/analysis/github',
-    name: 'github',
-    component: () => import('@/pages/GitHubPage.vue'),
+    component: () => import('@/layouts/GitHubLayout.vue'),
     meta: { title: 'GitHub 源码分析 — CapyMock' },
+    children: [
+      { path: '', name: 'github-list', component: () => import('@/pages/github/GitHubListPage.vue') },
+      { path: ':id', name: 'github-overview', component: () => import('@/pages/github/GitHubOverviewPage.vue'), meta: { title: '仓库概览 — CapyMock' } },
+      { path: ':id/deep', name: 'github-deep', component: () => import('@/pages/github/GitHubDeepPage.vue'), meta: { title: '深度分析 — CapyMock' } },
+    ],
   },
   {
     path: '/analysis/jd',

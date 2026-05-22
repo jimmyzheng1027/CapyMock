@@ -1,19 +1,13 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
+import { useScrollState } from '@/composables/useScrollState.js'
 
 const route = useRoute()
-const scrolled = ref(false)
+const { scrolled } = useScrollState()
 const sidebarOpen = ref(false)
-
-function onScroll() {
-  scrolled.value = window.scrollY > 10
-}
-
-onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
-onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
 const links = [
   { to: '/analysis/github', label: 'GitHub 源码分析', icon: 'github' },
@@ -92,16 +86,9 @@ const bottomLinks = [
         v-for="link in links"
         :key="link.to"
         :to="link.to"
-        class="flex items-center gap-3 rounded-xl text-sm font-medium no-underline transition-all"
-        :style="{
-          padding: '0.75rem 1rem',
-          borderRadius: 'var(--radius-lg)',
-          color: route.path === link.to ? 'var(--color-primary)' : 'var(--color-ink-light)',
-          background: route.path === link.to ? 'rgba(196,149,106,0.1)' : 'transparent',
-          fontWeight: route.path === link.to ? '600' : '500',
-        }"
-        @mouseenter="route.path !== link.to && ($event.currentTarget.style.background='var(--color-surface-alt)')"
-        @mouseleave="route.path !== link.to && ($event.currentTarget.style.background='transparent')"
+        class="flex items-center gap-3 rounded-xl text-sm no-underline transition-all hover:bg-surface-alt"
+        :class="route.path.startsWith(link.to) ? 'text-primary bg-primary/10 font-semibold' : 'text-ink-light font-medium'"
+        style="padding: 0.75rem 1rem"
         @click="sidebarOpen = false"
       >
         <svg v-if="link.icon === 'github'" width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -128,10 +115,8 @@ const bottomLinks = [
           v-for="link in bottomLinks"
           :key="link.to"
           :to="link.to"
-          class="flex items-center gap-3 rounded-xl text-sm font-medium no-underline transition-all"
-          style="padding: 0.75rem 1rem; color: var(--color-ink-light)"
-          @mouseenter="$event.currentTarget.style.background='var(--color-surface-alt)'"
-          @mouseleave="$event.currentTarget.style.background='transparent'"
+          class="flex items-center gap-3 rounded-xl text-sm font-medium no-underline transition-all text-ink-light hover:bg-surface-alt"
+          style="padding: 0.75rem 1rem"
           @click="sidebarOpen = false"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -151,9 +136,3 @@ const bottomLinks = [
     </main>
   </div>
 </template>
-
-<style>
-.dark .nav-glass {
-  background: rgba(15, 14, 12, 0.85) !important;
-}
-</style>

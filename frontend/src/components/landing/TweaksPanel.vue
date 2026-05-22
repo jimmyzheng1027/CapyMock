@@ -24,15 +24,13 @@ function onRadiusChange(e) {
 <template>
   <!-- Toggle button — matches original: bg-ink, color-base, 44px -->
   <button
-    class="fixed z-[9998] flex items-center justify-center transition-all"
+    class="fixed z-[9998] flex items-center justify-center transition-all hover:scale-110 hover:shadow-xl"
     :style="{
       bottom: '20px', right: '20px',
       width: '44px', height: '44px', borderRadius: 'var(--radius-full)',
       background: 'var(--color-ink)', color: 'var(--color-base)',
       boxShadow: 'var(--shadow-lg)',
     }"
-    @mouseenter="$event.currentTarget.style.transform='scale(1.08)'; $event.currentTarget.style.boxShadow='var(--shadow-xl)'"
-    @mouseleave="$event.currentTarget.style.transform=''; $event.currentTarget.style.boxShadow='var(--shadow-lg)'"
     @click="open = !open"
     aria-label="Tweaks"
   >
