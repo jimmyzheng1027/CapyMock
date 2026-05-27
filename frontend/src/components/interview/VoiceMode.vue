@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { interviewQuestions } from '@/data/interviewQuestions.js'
 import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
-import { INTERVIEW_TYPES } from '@/constants/interview.js'
+import { INTERVIEW_TYPES } from '@/data/interview.js'
 
 const props = defineProps({
   interviewType: { type: String, default: 'technical' },

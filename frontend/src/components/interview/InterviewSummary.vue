@@ -1,7 +1,7 @@
 <script setup>
 import SectionCard from '@/components/common/SectionCard.vue'
 import ChatBubble from '@/components/interview/ChatBubble.vue'
-import { INTERVIEW_TYPES } from '@/constants/interview.js'
+import { INTERVIEW_TYPES } from '@/data/interview.js'
 
 defineProps({
   summary: { type: Object, required: true }

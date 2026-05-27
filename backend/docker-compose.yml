@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # FastAPI backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TRACER=${TRACER:-noop}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-server:3000}
+      - SQLITE_PATH=/app/data/sessions.db
+      - JSONL_ROOT=/app/data/sessions
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - langfuse-server
+    restart: unless-stopped
+
+  # Langfuse (optional - for tracing)
+  langfuse-server:
+    image: langfuse/langfuse:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-your-nextauth-secret}
+      - SALT=${LANGFUSE_SALT:-your-salt}
+    depends_on:
+      - langfuse-db
+    restart: unless-stopped
+    profiles:
+      - langfuse
+
+  langfuse-db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    profiles:
+      - langfuse
+
+volumes:
+  langfuse-db-data:

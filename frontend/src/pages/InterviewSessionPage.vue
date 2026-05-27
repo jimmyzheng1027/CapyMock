@@ -5,7 +5,7 @@ import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
 import TextMode from '@/components/interview/TextMode.vue'
 import VoiceMode from '@/components/interview/VoiceMode.vue'
 import InterviewSummary from '@/components/interview/InterviewSummary.vue'
-import { INTERVIEW_TYPES } from '@/constants/interview.js'
+import { INTERVIEW_TYPES } from '@/data/interview.js'
 
 const route = useRoute()
 const router = useRouter()

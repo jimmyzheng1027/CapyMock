@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { INTERVIEW_TYPES, INTERVIEW_STATUS, STATUS_COLORS } from '@/constants/interview.js'
+import { INTERVIEW_TYPES, INTERVIEW_STATUS, STATUS_COLORS } from '@/data/interview.js'
 
 const props = defineProps({
   interview: { type: Object, required: true }

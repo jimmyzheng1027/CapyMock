@@ -21,7 +21,7 @@ const githubRepos = [
     description: 'A modern todo application built with React, TypeScript, and Zustand for state management',
     url: 'https://github.com/devuser/react-todo-app',
     analyzedAt: '2025-05-20T10:30:00Z',
-    score: 78,
+    // score: 78,
     techTags: ['React', 'TypeScript', 'Zustand', 'Vite'],
   },
   {
@@ -32,7 +32,7 @@ const githubRepos = [
     description: 'Admin dashboard template with Vue 3, Pinia, and ECharts data visualization',
     url: 'https://github.com/alice/vue-dashboard',
     analyzedAt: '2025-05-18T14:20:00Z',
-    score: 85,
+    // score: 85,
     techTags: ['Vue 3', 'Pinia', 'ECharts', 'Tailwind CSS'],
   },
   {
@@ -43,7 +43,7 @@ const githubRepos = [
     description: 'A fast CLI tool for processing CSV files, written in Rust with clap for argument parsing',
     url: 'https://github.com/bob/rust-cli-tool',
     analyzedAt: '2025-05-15T09:00:00Z',
-    score: 72,
+    // score: 72,
     techTags: ['Rust', 'clap', 'serde', 'CSV'],
   },
 ]

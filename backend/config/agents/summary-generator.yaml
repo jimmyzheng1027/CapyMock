@@ -1,0 +1,20 @@
+id: "summary-generator"
+prompt_template: "backend/data/prompt/summary_generator.md"
+llm:
+  provider: "dashscope"
+  model: "qwen-max"
+  temperature: 0.3
+  fallback:
+    provider: "deepseek"
+    model: "deepseek-chat"
+    temperature: 0.3
+tools:
+  - read_resume
+skills: []
+context:
+  max_history_tokens: 12000
+  compact_threshold: 10000
+policy:
+  max_steps: 5
+  parallel_tools: 1
+  tool_timeout: 30.0

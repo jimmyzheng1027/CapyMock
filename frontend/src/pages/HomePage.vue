@@ -6,7 +6,7 @@ import FeaturesSection from '@/components/landing/FeaturesSection.vue'
 import InterviewSection from '@/components/landing/InterviewSection.vue'
 import CtaSection from '@/components/landing/CtaSection.vue'
 import FooterSection from '@/components/landing/FooterSection.vue'
-import TweaksPanel from '@/components/landing/TweaksPanel.vue'
+import TweaksPanel from '@/components/common/TweaksPanel.vue'
 
 useScrollReveal()
 </script>
