@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 
 from agent.llm.base import BaseLLM
 from agent.llm.events import Done, TextDelta, Usage
-from api.router import app
+from api.app import app
 
 
 class FakeLLM(BaseLLM):

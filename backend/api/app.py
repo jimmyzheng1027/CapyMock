@@ -7,9 +7,9 @@ from fastapi import FastAPI
 from agent.context.skill_loader import SkillLoader
 from agent.factory import AgentFactory
 from agent.profile_loader import ProfileLoader
-from api.analysis import router as analysis_router
-from api.routes import router as api_router
-from api.sse import router as sse_router
+from api.github_analysis import router as analysis_router
+from api.sessions import router as api_router
+from api.chat import router as sse_router
 from api.tasks import router as tasks_router
 from api.ws import router as ws_router
 from config.settings import settings
