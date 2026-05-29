@@ -28,9 +28,3 @@ class DashScopeCompatLLM(OpenAICompatibleLLM):
             params["extra_body"] = {"enable_thinking": True}
         return params
 
-    def _extract_thinking(self, delta: object) -> str | None:
-        """Extract reasoning content from DashScope thinking models."""
-        # DashScope uses reasoning_content in compatible mode
-        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-            return delta.reasoning_content
-        return None

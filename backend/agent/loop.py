@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import time
 from collections.abc import AsyncIterator
 
 from agent.context.builder import ContextBuilder
@@ -17,13 +17,21 @@ from agent.llm.events import (
     ToolCallStart,
     Usage,
 )
+from trace import (
+    span_level_for_result,
+    tool_result_output,
+    trace_agent_turn,
+    trace_compaction,
+    trace_llm_call,
+    trace_react_step,
+    trace_tool,
+)
 from agent.profile import AgentProfile
 from agent.state import AgentState, can_transition
 from api.schemas import EventType, FrontendEvent
 from storage.session.store import SessionStore
-from tool.base import ToolContext, ToolMeta
+from tool.base import ToolContext, ToolMeta, ToolResult
 from tool.executor import ToolCall, ToolExecutor
-from tracer.base import Tracer
 
 
 class CancelToken:
@@ -54,7 +62,6 @@ class ReActAgent:
         user_id: str,
         session_id: str,
         cancel_token: CancelToken | None = None,
-        tracer: Tracer | None = None,
     ) -> None:
         self.profile = profile
         self.llm = llm
@@ -66,7 +73,6 @@ class ReActAgent:
         self.user_id = user_id
         self.session_id = session_id
         self.cancel_token = cancel_token or CancelToken()
-        self.tracer = tracer
         self.state = AgentState.IDLE
         self._text_buffer: list[str] = []
         self._current_tool_calls: list[ToolCall] = []
@@ -76,217 +82,209 @@ class ReActAgent:
 
         Yields FrontendEvents to be sent to the frontend.
         """
-        # Transition to thinking
-        self._set_state(AgentState.THINKING)
-        yield self._make_state_event(AgentState.THINKING)
+        with trace_agent_turn(
+            session_id=self.session_id,
+            user_id=self.user_id,
+            user_input=user_input,
+            profile_id=self.profile.id,
+        ) as turn:
+            turn_output: dict[str, object] = {"stop_reason": "completed", "steps": 0}
 
-        # Get session events for context
-        events = self.session_store.read_events(self.user_id, self.session_id)
+            # Transition to thinking
+            self._set_state(AgentState.THINKING)
+            yield self._make_state_event(AgentState.THINKING)
 
-        # Build messages
-        messages = self.context_builder.build_messages(self.profile, events, user_input)
+            # Get session events for context
+            events = self.session_store.read_events(self.user_id, self.session_id)
 
-        # Check if compaction is needed
-        if self.compactor.should_compact(self.profile, messages):
-            yield self._make_state_event(AgentState.COMPACTING)
-            summary, messages = await self.compactor.compact(self.profile, messages)
-            if summary:
-                yield FrontendEvent(
-                    type=EventType.SESSION_COMPACTED,
-                    payload={"summary_text": summary},
-                )
+            # Build messages
+            messages = self.context_builder.build_messages(
+                self.profile, events, user_input
+            )
 
-        # ReAct loop
-        steps = 0
-        done = False
-        while steps < self.profile.policy.max_steps and not done:
-            if self.cancel_token.is_set():
-                yield self._make_interrupt_event()
-                break
+            # Check if compaction is needed
+            if self.compactor.should_compact(self.profile, messages):
+                yield self._make_state_event(AgentState.COMPACTING)
+                with trace_compaction() as compaction:
+                    summary, messages = await self.compactor.compact(
+                        self.profile, messages
+                    )
+                    compaction.update(
+                        output={"summary": summary} if summary else {"summary": None}
+                    )
+                if summary:
+                    yield FrontendEvent(
+                        type=EventType.SESSION_COMPACTED,
+                        payload={"summary_text": summary},
+                    )
 
-            steps += 1
-
-            # Stream LLM response
-            yield self._make_state_event(AgentState.STREAMING_TEXT)
-            self._text_buffer = []
-            self._current_tool_calls = []
-            should_continue = False
-
-            async for event in self._stream_llm(messages):
+            # ReAct loop
+            steps = 0
+            done = False
+            while steps < self.profile.policy.max_steps and not done:
                 if self.cancel_token.is_set():
                     yield self._make_interrupt_event()
-                    done = True
+                    turn_output["stop_reason"] = "interrupted"
                     break
 
-                if isinstance(event, TextDelta):
-                    self._text_buffer.append(event.delta)
-                    yield FrontendEvent(
-                        type=EventType.ASSISTANT_TEXT_DELTA,
-                        payload={"delta": event.delta},
-                    )
-                elif isinstance(event, ThinkingDelta):
-                    yield FrontendEvent(
-                        type=EventType.ASSISTANT_THINKING_DELTA,
-                        payload={"delta": event.delta},
-                    )
-                elif isinstance(event, ToolCallStart):
-                    self._current_tool_calls.append(
-                        ToolCall(
-                            tool_call_id=event.tool_call_id,
-                            tool_name=event.tool_name,
-                            args={},
-                        )
-                    )
-                    yield FrontendEvent(
-                        type=EventType.TOOL_CALL_START,
-                        payload={
-                            "tool_call_id": event.tool_call_id,
-                            "tool_name": event.tool_name,
-                        },
-                    )
-                elif isinstance(event, ToolCallEnd):
-                    # Update tool call args
-                    for tc in self._current_tool_calls:
-                        if tc.tool_call_id == event.tool_call_id:
-                            tc.args = event.args
-                            break
-                elif isinstance(event, Done):
-                    if event.stop_reason == "tool_use":
-                        # Execute tools
-                        yield self._make_state_event(AgentState.EXECUTING_TOOLS)
-                        tool_results = await self._execute_tools()
+                steps += 1
+                with trace_react_step(step=steps) as step_span:
+                    yield self._make_state_event(AgentState.STREAMING_TEXT)
 
-                        # Yield tool results
-                        for result_event in tool_results:
-                            yield result_event
+                    self._react_should_continue = False
+                    self._text_buffer = []
+                    self._current_tool_calls = []
+                    async for fe in self._process_llm_events(
+                        messages, self._stream_llm(messages)
+                    ):
+                        yield fe
 
-                        # Add tool results to messages
-                        messages.extend(self._build_tool_messages(tool_results))
+                    step_span.update(
+                        output={
+                            "continued": self._react_should_continue,
+                            "tool_calls": len(self._current_tool_calls),
+                        }
+                    )
 
-                        yield self._make_state_event(AgentState.AGGREGATING)
+                if self._react_should_continue:
+                    continue
+                done = True
 
-                        # Continue loop for next LLM call
-                        should_continue = True
+            # Check if max steps exceeded
+            if steps >= self.profile.policy.max_steps and not done:
+                yield FrontendEvent(
+                    type=EventType.ERROR,
+                    payload={
+                        "code": "max_steps_exceeded",
+                        "message": (
+                            f"Maximum steps ({self.profile.policy.max_steps}) exceeded"
+                        ),
+                    },
+                )
+                yield FrontendEvent(
+                    type=EventType.TURN_DONE,
+                    payload={"stop_reason": "max_steps"},
+                )
+                turn_output["stop_reason"] = "max_steps"
+
+            turn_output["steps"] = steps
+            if self._text_buffer:
+                turn_output["assistant_text"] = "".join(self._text_buffer)
+            turn.update(output=turn_output)
+
+            # Return to idle
+            self._set_state(AgentState.IDLE)
+            yield self._make_state_event(AgentState.IDLE)
+
+    async def _process_llm_events(
+        self, messages: list[dict], event_stream: AsyncIterator[LLMEvent]
+    ) -> AsyncIterator[FrontendEvent]:
+        """Process LLM events, executing tools if needed.
+
+        Sets self._react_should_continue = True when tools were executed
+        and the ReAct loop should call the LLM again.
+        """
+        async for event in event_stream:
+            if self.cancel_token.is_set():
+                yield self._make_interrupt_event()
+                return
+
+            if isinstance(event, TextDelta):
+                self._text_buffer.append(event.delta)
+                yield FrontendEvent(
+                    type=EventType.ASSISTANT_TEXT_DELTA,
+                    payload={"delta": event.delta},
+                )
+            elif isinstance(event, ThinkingDelta):
+                yield FrontendEvent(
+                    type=EventType.ASSISTANT_THINKING_DELTA,
+                    payload={"delta": event.delta},
+                )
+            elif isinstance(event, ToolCallStart):
+                self._current_tool_calls.append(
+                    ToolCall(
+                        tool_call_id=event.tool_call_id,
+                        tool_name=event.tool_name,
+                        args={},
+                    )
+                )
+                yield FrontendEvent(
+                    type=EventType.TOOL_CALL_START,
+                    payload={
+                        "tool_call_id": event.tool_call_id,
+                        "tool_name": event.tool_name,
+                    },
+                )
+            elif isinstance(event, ToolCallEnd):
+                for tc in self._current_tool_calls:
+                    if tc.tool_call_id == event.tool_call_id:
+                        tc.args = event.args
                         break
-                    else:
-                        # End turn
-                        full_text = "".join(self._text_buffer)
-                        yield FrontendEvent(
-                            type=EventType.ASSISTANT_TEXT_DONE,
-                            payload={"text": full_text, "partial": False},
-                        )
-                        yield FrontendEvent(
-                            type=EventType.TURN_DONE,
-                            payload={"stop_reason": event.stop_reason},
-                        )
-                        done = True
-                        break
-                elif isinstance(event, ProviderError):
+            elif isinstance(event, Done):
+                if event.stop_reason == "tool_use":
+                    yield self._make_state_event(AgentState.EXECUTING_TOOLS)
+                    tool_results = await self._execute_tools()
+                    for result_event in tool_results:
+                        yield result_event
+                    messages.extend(self._build_tool_messages(tool_results))
+                    yield self._make_state_event(AgentState.AGGREGATING)
+                    self._react_should_continue = True
+                else:
+                    full_text = "".join(self._text_buffer)
                     yield FrontendEvent(
-                        type=EventType.ERROR,
-                        payload={
-                            "code": event.code,
-                            "message": event.message,
-                            "retryable": event.retryable,
-                        },
+                        type=EventType.ASSISTANT_TEXT_DONE,
+                        payload={"text": full_text, "partial": False},
                     )
-                    if event.retryable and self.profile.llm.fallback:
-                        # Try fallback provider
-                        fallback_llm = self._create_fallback_llm()
-                        if fallback_llm:
-                            # Retry with fallback
-                            async for fallback_event in fallback_llm.stream(
-                                messages, self._get_tool_schemas()
-                            ):
-                                if isinstance(fallback_event, TextDelta):
-                                    self._text_buffer.append(fallback_event.delta)
-                                    yield FrontendEvent(
-                                        type=EventType.ASSISTANT_TEXT_DELTA,
-                                        payload={"delta": fallback_event.delta},
-                                    )
-                                elif isinstance(fallback_event, Done):
-                                    if fallback_event.stop_reason == "tool_use":
-                                        # Handle tool use from fallback
-                                        pass
-                                    else:
-                                        full_text = "".join(self._text_buffer)
-                                        yield FrontendEvent(
-                                            type=EventType.ASSISTANT_TEXT_DONE,
-                                            payload={"text": full_text, "partial": False},
-                                        )
-                                        yield FrontendEvent(
-                                            type=EventType.TURN_DONE,
-                                            payload={"stop_reason": fallback_event.stop_reason},
-                                        )
-                                    break
-                            break
                     yield FrontendEvent(
                         type=EventType.TURN_DONE,
-                        payload={"stop_reason": "error"},
+                        payload={"stop_reason": event.stop_reason},
                     )
-                    done = True
-                    break
-
-            # Check if we should continue to next iteration
-            if should_continue:
-                continue
-
-        # Check if max steps exceeded
-        if steps >= self.profile.policy.max_steps:
-            yield FrontendEvent(
-                type=EventType.ERROR,
-                payload={
-                    "code": "max_steps_exceeded",
-                    "message": f"Maximum steps ({self.profile.policy.max_steps}) exceeded",
-                },
-            )
-            yield FrontendEvent(
-                type=EventType.TURN_DONE,
-                payload={"stop_reason": "max_steps"},
-            )
-
-        # Return to idle
-        self._set_state(AgentState.IDLE)
-        yield self._make_state_event(AgentState.IDLE)
+                return
+            elif isinstance(event, ProviderError):
+                yield FrontendEvent(
+                    type=EventType.ERROR,
+                    payload={
+                        "code": event.code,
+                        "message": event.message,
+                        "retryable": event.retryable,
+                    },
+                )
+                if event.retryable and self.profile.llm.fallback:
+                    fallback_llm = self._create_fallback_llm()
+                    if fallback_llm:
+                        async for fe in self._process_llm_events(
+                            messages, fallback_llm.stream(messages, self._get_tool_schemas())
+                        ):
+                            yield fe
+                        return
+                yield FrontendEvent(
+                    type=EventType.TURN_DONE,
+                    payload={"stop_reason": "error"},
+                )
+                return
 
     async def _stream_llm(self, messages: list[dict]) -> AsyncIterator[LLMEvent]:
         """Stream events from the LLM."""
         tool_schemas = self._get_tool_schemas()
-        start_time = time.time()
-
-        # Create tracer span
-        span = None
-        if self.tracer:
-            span = self.tracer.span(
-                "llm_call",
-                model=self.llm.get_model_name(),
-                session_id=self.session_id,
-            )
-
+        model = self.llm.get_model_name()
         prompt_tokens = 0
         completion_tokens = 0
 
-        try:
+        with trace_llm_call(model=model, messages=messages) as generation:
             async for event in self.llm.stream(messages, tool_schemas):
-                # Track usage
                 if isinstance(event, Usage):
                     prompt_tokens = event.prompt_tokens
                     completion_tokens = event.completion_tokens
-
                 yield event
-        finally:
-            # Record LLM call
-            if self.tracer and span:
-                latency_ms = (time.time() - start_time) * 1000
-                self.tracer.record_llm_call(
-                    span=span,
-                    model=self.llm.get_model_name(),
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=prompt_tokens + completion_tokens,
-                    latency_ms=latency_ms,
-                )
-                self.tracer.end_span(span)
+
+            generation.update(
+                output="".join(self._text_buffer),
+                usage_details={
+                    "input": prompt_tokens,
+                    "output": completion_tokens,
+                    "total": prompt_tokens + completion_tokens,
+                },
+            )
 
     async def _execute_tools(self) -> list[FrontendEvent]:
         """Execute tool calls and return result events."""
@@ -298,36 +296,25 @@ class ReActAgent:
                 cancel_token=self.cancel_token,
             )
 
-        start_time = time.time()
-
-        # Create tracer span for tool execution
-        span = None
-        if self.tracer:
-            span = self.tracer.span(
-                "tool_execution",
-                tool_count=len(self._current_tool_calls),
-                session_id=self.session_id,
-            )
-
-        results = await self.tool_executor.run_parallel(
-            self._current_tool_calls,
-            ctx_factory,
-            self.tools,
-            parallel_limit=self.profile.policy.parallel_tools,
-            cancel_token=self.cancel_token,
-        )
-
-        # Record tool calls
-        if self.tracer and span:
-            duration_ms = (time.time() - start_time) * 1000
-            for call, result in zip(self._current_tool_calls, results):
-                self.tracer.record_tool_call(
-                    span=span,
-                    tool_name=call.tool_name,
-                    duration_ms=duration_ms / len(self._current_tool_calls),
-                    success=result.status == "ok",
+        async def execute_one(call: ToolCall) -> ToolResult:
+            with trace_tool(name=call.tool_name, args=call.args) as tool_span:
+                batch = await self.tool_executor.run_parallel(
+                    [call],
+                    ctx_factory,
+                    self.tools,
+                    parallel_limit=1,
+                    cancel_token=self.cancel_token,
                 )
-            self.tracer.end_span(span)
+                result = batch[0]
+                tool_span.update(
+                    output=tool_result_output(result),
+                    level=span_level_for_result(result),
+                )
+                return result
+
+        results = await asyncio.gather(
+            *[execute_one(call) for call in self._current_tool_calls]
+        )
 
         events = []
         for call, result in zip(self._current_tool_calls, results):
@@ -403,16 +390,9 @@ class ReActAgent:
             return None
 
     def _get_api_key(self, provider: str) -> str:
-        """Get API key for a provider from settings."""
         from config.settings import settings
 
-        if provider == "dashscope":
-            return settings.DASHSCOPE_API_KEY
-        elif provider == "deepseek":
-            return settings.DEEPSEEK_API_KEY
-        elif provider == "openai":
-            return settings.OPENAI_API_KEY
-        return ""
+        return settings.get_api_key(provider)
 
     def _set_state(self, new_state: AgentState) -> None:
         """Set agent state with validation."""

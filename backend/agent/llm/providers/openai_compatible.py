@@ -54,18 +54,15 @@ class OpenAICompatibleLLM(BaseLLM):
                 delta = chunk.choices[0].delta if chunk.choices else None
                 finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
 
-                # Handle thinking/reasoning content
                 thinking = self._extract_thinking(delta)
                 if thinking:
                     has_thinking = True
                     yield ThinkingDelta(delta=thinking)
 
-                # Handle text content
                 if delta and delta.content:
                     has_text = True
                     yield TextDelta(delta=delta.content)
 
-                # Handle tool calls
                 if delta and delta.tool_calls:
                     for tc in delta.tool_calls:
                         if tc.id and tc.function and tc.function.name:
@@ -86,9 +83,7 @@ class OpenAICompatibleLLM(BaseLLM):
                                 delta=tc.function.arguments,
                             )
 
-                # Handle finish reason
                 if finish_reason:
-                    # Emit ToolCallEnd for each tool call
                     for tool_call_id, args_str in tool_call_args.items():
                         try:
                             args = json.loads(args_str) if args_str else {}
@@ -100,7 +95,6 @@ class OpenAICompatibleLLM(BaseLLM):
                             args=args,
                         )
 
-                    # Emit Usage if available
                     if chunk.usage:
                         yield Usage(
                             prompt_tokens=chunk.usage.prompt_tokens,
@@ -108,7 +102,6 @@ class OpenAICompatibleLLM(BaseLLM):
                             total_tokens=chunk.usage.total_tokens,
                         )
 
-                    # Map finish reason to stop reason
                     stop_reason = self._map_finish_reason(finish_reason)
                     yield Done(stop_reason=stop_reason)
 
@@ -133,14 +126,12 @@ class OpenAICompatibleLLM(BaseLLM):
         if tools:
             params["tools"] = self._normalize_tool_schema(tools)
 
-        # Add provider-specific parameters
         params.update(self._extra_request_params())
 
         return params
 
     def _extract_thinking(self, delta: object) -> str | None:
         """Extract thinking/reasoning content from a chunk. Override for provider-specific behavior."""
-        # Default: check for reasoning_content (DeepSeek-R1 style)
         if hasattr(delta, "reasoning_content") and delta.reasoning_content:
             return delta.reasoning_content
         return None

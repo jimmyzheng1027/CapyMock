@@ -40,7 +40,6 @@ class ToolContext:
     session: Any = None
     user_id: str = ""
     profile: Any = None
-    tracer: Any = None
     cancel_token: Any = None
     permissions: dict = field(default_factory=dict)
 

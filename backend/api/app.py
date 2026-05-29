@@ -6,19 +6,17 @@ from fastapi import FastAPI
 
 from agent.context.skill_loader import SkillLoader
 from agent.factory import AgentFactory
+from trace import init_tracing, is_tracing_enabled, shutdown_tracing
 from agent.profile_loader import ProfileLoader
+from api.chat import router as sse_router
 from api.github_analysis import router as analysis_router
 from api.sessions import router as api_router
-from api.chat import router as sse_router
 from api.tasks import router as tasks_router
 from api.ws import router as ws_router
-from config.settings import settings
 from storage.db.engine import init_db
 from storage.session.store import SessionStore
 from tool.builtins import TOOLS
 from tool.registry import ToolRegistry
-from tracer.langfuse_tracer import LangfuseTracer
-from tracer.noop import NoopTracer
 
 
 @asynccontextmanager
@@ -44,17 +42,11 @@ async def lifespan(app: FastAPI):
     # Initialize session store
     session_store = SessionStore()
 
-    # Initialize tracer
-    if settings.TRACER == "langfuse":
-        tracer = LangfuseTracer(
-            public_key=settings.LANGFUSE_PUBLIC_KEY,
-            secret_key=settings.LANGFUSE_SECRET_KEY,
-            host=settings.LANGFUSE_HOST,
-        )
-        print("Using Langfuse tracer")
+    init_tracing()
+    if is_tracing_enabled():
+        print("Langfuse tracing enabled")
     else:
-        tracer = NoopTracer()
-        print("Using Noop tracer")
+        print("Tracing disabled (noop)")
 
     # Initialize agent factory
     agent_factory = AgentFactory(
@@ -68,11 +60,10 @@ async def lifespan(app: FastAPI):
     app.state.agent_factory = agent_factory
     app.state.session_store = session_store
     app.state.profile_loader = profile_loader
-    app.state.tracer = tracer
 
     yield
 
-    # Shutdown
+    shutdown_tracing()
     print("Shutting down...")
 
 

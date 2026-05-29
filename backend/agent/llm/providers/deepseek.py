@@ -19,8 +19,3 @@ class DeepSeekLLM(OpenAICompatibleLLM):
             temperature=temperature,
         )
 
-    def _extract_thinking(self, delta: object) -> str | None:
-        """Extract reasoning_content from DeepSeek-R1 models."""
-        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-            return delta.reasoning_content
-        return None

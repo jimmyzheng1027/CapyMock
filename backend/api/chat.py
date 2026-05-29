@@ -10,10 +10,9 @@ from pydantic import BaseModel
 
 from agent.factory import AgentFactory
 from agent.loop import CancelToken
-from api.deps import get_agent_factory, get_session_store, get_tracer
+from api.deps import get_agent_factory, get_session_store
 from api.schemas import EventType, FrontendEvent
 from storage.session.store import SessionStore
-from tracer.base import Tracer
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,6 @@ async def send_message(
     request: SendMessageRequest,
     agent_factory: AgentFactory = Depends(get_agent_factory),
     session_store: SessionStore = Depends(get_session_store),
-    tracer: Tracer = Depends(get_tracer),
 ):
     """Send a user message and trigger agent processing (for SSE stream)."""
     state = _get_or_create_session_state(session_id)
@@ -93,7 +91,6 @@ async def send_message(
                 user_id="default",
             )
             agent.cancel_token = state["cancel_token"]
-            agent.tracer = tracer
 
             # Run agent in background
             asyncio.create_task(
@@ -112,7 +109,6 @@ async def chat(
     request: ChatRequest,
     agent_factory: AgentFactory = Depends(get_agent_factory),
     session_store: SessionStore = Depends(get_session_store),
-    tracer: Tracer = Depends(get_tracer),
 ):
     """Synchronous chat - wait for complete response."""
     # Get session info
@@ -135,7 +131,6 @@ async def chat(
             mode="text",
             user_id="default",
         )
-        agent.tracer = tracer
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

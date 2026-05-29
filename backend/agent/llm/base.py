@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from agent.llm.events import LLMEvent, TextDelta, Usage
+from agent.llm.events import LLMEvent, TextDelta, ToolCallEnd, Usage
 
 
 @dataclass
@@ -41,6 +41,12 @@ class BaseLLM(ABC):
         async for event in self.stream(messages, tools):
             if isinstance(event, TextDelta):
                 text_parts.append(event.delta)
+            elif isinstance(event, ToolCallEnd):
+                tool_calls.append({
+                    "id": event.tool_call_id,
+                    "name": event.tool_name,
+                    "args": event.args,
+                })
             elif isinstance(event, Usage):
                 usage = event
 

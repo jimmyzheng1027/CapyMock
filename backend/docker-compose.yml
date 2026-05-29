@@ -15,7 +15,7 @@ services:
       - TRACER=${TRACER:-noop}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-server:3000}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-${LANGFUSE_HOST:-http://langfuse-server:3000}}
       - SQLITE_PATH=/app/data/sessions.db
       - JSONL_ROOT=/app/data/sessions
     volumes:

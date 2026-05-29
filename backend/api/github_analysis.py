@@ -7,11 +7,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from agent.factory import AgentFactory
-from api.deps import get_agent_factory, get_tracer
+from api.deps import get_agent_factory
 from api.schemas import EventType
 from service.task_service import task_service
 from storage.session.store import SessionStore
-from tracer.base import Tracer
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,6 @@ class AnalysisResponse(BaseModel):
 async def submit_analysis(
     request: AnalysisRequest,
     agent_factory: AgentFactory = Depends(get_agent_factory),
-    tracer: Tracer = Depends(get_tracer),
 ):
     """Submit a GitHub repository analysis task."""
     # Create task
@@ -47,7 +45,6 @@ async def submit_analysis(
             repo_url=request.repo_url,
             session_id=request.session_id,
             agent_factory=agent_factory,
-            tracer=tracer,
         )
     )
 
@@ -59,7 +56,6 @@ async def _run_analysis(
     repo_url: str,
     session_id: str | None,
     agent_factory: AgentFactory,
-    tracer: Tracer,
 ):
     """Run GitHub analysis in background."""
     try:
@@ -90,8 +86,6 @@ async def _run_analysis(
             mode="text",
             user_id="system",
         )
-        agent.tracer = tracer
-
         # Update progress: analyzing
         await task_service.update_progress(
             task_id, 0.3, f"Analyzing repository: {repo_url}"

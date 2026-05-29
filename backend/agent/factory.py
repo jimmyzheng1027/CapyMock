@@ -60,23 +60,16 @@ class AgentFactory:
         if mode == "voice":
             raise NotImplementedError("Voice mode is not yet implemented")
 
-        # Get profile
         profile = self.profile_loader.get(profile_id)
         if profile is None:
             raise ProfileNotFound(f"Profile not found: {profile_id}")
 
-        # Create LLM
         llm = self._create_llm(profile)
-
-        # Filter tools by profile whitelist
         tools = self._get_tools(profile)
-
-        # Create components
         context_builder = ContextBuilder(self.skill_loader)
         compactor = ContextCompactor(llm)
         tool_executor = ToolExecutor(default_timeout=profile.policy.tool_timeout)
 
-        # Create agent
         return ReActAgent(
             profile=profile,
             llm=llm,
@@ -102,14 +95,7 @@ class AgentFactory:
         )
 
     def _get_api_key(self, provider: str) -> str:
-        """Get API key for a provider from settings."""
-        if provider == "dashscope":
-            return settings.DASHSCOPE_API_KEY
-        elif provider == "deepseek":
-            return settings.DEEPSEEK_API_KEY
-        elif provider == "openai":
-            return settings.OPENAI_API_KEY
-        return ""
+        return settings.get_api_key(provider)
 
     def _get_tools(self, profile: AgentProfile) -> dict[str, ToolMeta]:
         """Get tools filtered by profile whitelist."""

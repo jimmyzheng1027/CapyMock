@@ -44,8 +44,6 @@ async def voice_websocket(
     # Get dependencies from app state
     agent_factory: AgentFactory = websocket.app.state.agent_factory
     session_store: SessionStore = websocket.app.state.session_store
-    tracer = websocket.app.state.tracer
-
     # Get profile and user_id from query params or defaults
     profile_id = websocket.query_params.get("profile", "interviewer-technical")
     user_id = websocket.query_params.get("user_id", "default")
@@ -72,7 +70,6 @@ async def voice_websocket(
                 user_id=user_id,
             )
             agent.cancel_token = cancel_token
-            agent.tracer = tracer
         except Exception as e:
             await websocket.send_text(
                 FrontendEvent(

@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from pydantic_settings import BaseSettings
 
 
@@ -10,14 +12,30 @@ class Settings(BaseSettings):
     MIMO_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
+    _PROVIDER_KEY_MAP: ClassVar[dict[str, str]] = {
+        "dashscope": "DASHSCOPE_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "mimo": "MIMO_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
+
+    def get_api_key(self, provider: str) -> str:
+        attr = self._PROVIDER_KEY_MAP.get(provider, "")
+        return getattr(self, attr, "") if attr else ""
+
     # Tracer
     TRACER: str = "noop"  # "noop" | "langfuse"
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
-    LANGFUSE_HOST: str = "http://localhost:3000"
+    LANGFUSE_BASE_URL: str = ""
+    LANGFUSE_HOST: str = "http://localhost:3000"  # legacy alias for LANGFUSE_BASE_URL
+
+    @property
+    def langfuse_base_url(self) -> str:
+        return self.LANGFUSE_BASE_URL or self.LANGFUSE_HOST
 
     # Storage
-    SQLITE_PATH: str = "backend/storage/sessions.db"
+    SQLITE_PATH: str = "backend/storage/db"
     JSONL_ROOT: str = "backend/storage/sessions"
 
     # Resume storage
