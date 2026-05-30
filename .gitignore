@@ -35,7 +35,16 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
-backend/storage/sessions/
+backend/storage/db/*.db
+
+# Backend runtime storage (keep source .py and .gitkeep)
+backend/storage/repo/*
+!backend/storage/repo/.gitkeep
+backend/storage/memory/*
+!backend/storage/memory/*.py
+!backend/storage/memory/.gitkeep
+backend/storage/sessions/*
+!backend/storage/sessions/.gitkeep
 
 # IDE
 .vscode/
