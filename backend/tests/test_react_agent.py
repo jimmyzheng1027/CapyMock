@@ -145,6 +145,81 @@ class TestReActAgent:
         assert text_events[1].payload["delta"] == "How can I help?"
 
     @pytest.mark.asyncio
+    async def test_tool_use_appends_assistant_message(
+        self, profile, session_store, skill_loader
+    ) -> None:
+        """Test: multi-turn tool loop includes assistant tool_calls before tool results."""
+        round_events = [
+            [
+                ToolCallStart(tool_call_id="call_1", tool_name="sample_tool"),
+                ToolCallEnd(
+                    tool_call_id="call_1",
+                    tool_name="sample_tool",
+                    args={"input": "test"},
+                ),
+                Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                Done(stop_reason="tool_use"),
+            ],
+            [
+                TextDelta(delta="Done"),
+                Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                Done(stop_reason="end_turn"),
+            ],
+        ]
+
+        class TwoRoundLLM(BaseLLM):
+            def __init__(self) -> None:
+                self.round = 0
+                self.messages_seen: list[list[dict]] = []
+
+            async def stream(
+                self, messages: list[dict], tools: list[dict] | None = None
+            ) -> AsyncIterator[LLMEvent]:
+                self.messages_seen.append(list(messages))
+                events = round_events[self.round]
+                self.round += 1
+                for event in events:
+                    yield event
+                    await asyncio.sleep(0)
+
+            def get_model_name(self) -> str:
+                return "two-round-fake"
+
+        llm = TwoRoundLLM()
+        context_builder = ContextBuilder(skill_loader)
+        compactor = ContextCompactor(llm)
+        tool_executor = ToolExecutor()
+        registry = ToolRegistry(tools=[sample_tool])
+        tools = {meta.name: meta for meta in registry.all()}
+
+        session_store.create("user1", "session1", "profile1")
+
+        agent = ReActAgent(
+            profile=profile,
+            llm=llm,
+            context_builder=context_builder,
+            compactor=compactor,
+            tool_executor=tool_executor,
+            tools=tools,
+            session_store=session_store,
+            user_id="user1",
+            session_id="session1",
+        )
+
+        async for _ in agent.run("Use tool"):
+            pass
+
+        assert llm.round == 2
+        second_turn = llm.messages_seen[1]
+        assistant_msgs = [m for m in second_turn if m.get("role") == "assistant"]
+        tool_msgs = [m for m in second_turn if m.get("role") == "tool"]
+        assert len(assistant_msgs) == 1
+        assert assistant_msgs[0].get("tool_calls")
+        assert assistant_msgs[0]["tool_calls"][0]["function"]["name"] == "sample_tool"
+        assert len(tool_msgs) == 1
+        assert tool_msgs[0]["tool_call_id"] == "call_1"
+
+    @pytest.mark.asyncio
     async def sample_tool_call(
         self, profile, session_store, skill_loader
     ) -> None:

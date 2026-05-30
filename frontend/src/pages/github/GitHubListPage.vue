@@ -8,11 +8,14 @@ import EmptyState from '@/components/github/EmptyState.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 
 const router = useRouter()
-const { repos, loading, fetchRepos, analyzeNewRepo } = useGithubAnalysis()
+const { repos, loading, activeTaskId, fetchRepos, analyzeNewRepo, reconnectTask } = useGithubAnalysis()
 const addRepoRef = ref(null)
 
-onMounted(() => {
-  fetchRepos()
+onMounted(async () => {
+  await fetchRepos()
+  if (activeTaskId.value) {
+    reconnectTask(activeTaskId.value)
+  }
 })
 
 async function handleAnalyzed(url) {
@@ -40,7 +43,7 @@ function triggerAdd() {
 
     <!-- Repo grid -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <RepoCard v-for="repo in repos" :key="repo.id" :repo="repo" />
+      <RepoCard v-for="repo in repos" :key="repo.id" :repo="repo" @retry="handleAnalyzed" />
     </div>
 
     <!-- Add repo card (always visible) -->

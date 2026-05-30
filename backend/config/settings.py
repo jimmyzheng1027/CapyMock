@@ -35,11 +35,17 @@ class Settings(BaseSettings):
         return self.LANGFUSE_BASE_URL or self.LANGFUSE_HOST
 
     # Storage
-    SQLITE_PATH: str = "backend/storage/db"
-    JSONL_ROOT: str = "backend/storage/sessions"
+    SQLITE_PATH: str = "storage/db/app.db"
+    JSONL_ROOT: str = "storage/sessions"
 
     # Resume storage
-    RESUME_ROOT: str = "backend/data/resumes"
+    RESUME_ROOT: str = "data/resumes"
+
+    # Repo analysis & memory
+    REPO_ROOT: str = "storage/repo"
+    MEMORY_ROOT: str = "storage/memory"
+    CLONE_TIMEOUT: int = 120
+    MAX_REPO_FILES: int = 10000
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

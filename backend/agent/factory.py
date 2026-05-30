@@ -41,6 +41,7 @@ class AgentFactory:
         session_id: str,
         mode: str = "text",
         user_id: str = "default",
+        db_session: object | None = None,
     ) -> ReActAgent:
         """Create a ReActAgent instance.
 
@@ -70,7 +71,7 @@ class AgentFactory:
         compactor = ContextCompactor(llm)
         tool_executor = ToolExecutor(default_timeout=profile.policy.tool_timeout)
 
-        return ReActAgent(
+        agent = ReActAgent(
             profile=profile,
             llm=llm,
             context_builder=context_builder,
@@ -81,6 +82,8 @@ class AgentFactory:
             user_id=user_id,
             session_id=session_id,
         )
+        agent._db_session = db_session
+        return agent
 
     def _create_llm(self, profile: AgentProfile) -> BaseLLM:
         """Create an LLM instance from profile config."""

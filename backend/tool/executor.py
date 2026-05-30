@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+from pydantic import ValidationError
 
 from tool.base import ToolContext, ToolMeta, ToolResult
 
@@ -92,10 +95,38 @@ class ToolExecutor:
                         message=f"Tool {call.tool_name} was cancelled",
                         summary=f"Cancelled: {call.tool_name}",
                     )
+                except ValidationError as e:
+                    # LLM passed invalid/empty args — return full schema as hint
+                    schema = meta.args_model.model_json_schema()
+                    props = schema.get("properties", {})
+                    required = schema.get("required", [])
+                    fields_desc = []
+                    example_args = {}
+                    for name, info in props.items():
+                        req = "REQUIRED" if name in required else "optional"
+                        desc = info.get("description", "")
+                        default = info.get("default", "no default")
+                        fields_desc.append(f"  - {name} ({req}): {desc} [default: {default}]")
+                        if name in required:
+                            example_args[name] = f"<{name}>"
+                    schema_str = "\n".join(fields_desc)
+                    example_str = json.dumps(example_args)
+                    return ToolResult.err(
+                        code="invalid_args",
+                        message=(
+                            f"Tool {call.tool_name} was called with invalid arguments: {call.args}\n"
+                            f"Required fields: {', '.join(required)}\n"
+                            f"Schema:\n{schema_str}\n"
+                            f"Correct example: {call.tool_name}({example_str})"
+                        ),
+                        summary=f"Missing args for {call.tool_name}",
+                    )
                 except Exception as e:
+                    import traceback
+                    tb = traceback.format_exc()
                     return ToolResult.err(
                         code="error",
-                        message=f"Tool {call.tool_name} error: {str(e)}",
+                        message=f"Tool {call.tool_name} error: {type(e).__name__}: {str(e) or repr(e)}\n{tb}",
                         summary=f"Error: {call.tool_name}",
                     )
 

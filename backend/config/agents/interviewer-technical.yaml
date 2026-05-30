@@ -1,5 +1,5 @@
 id: "interviewer-technical"
-prompt_template: "backend/data/prompt/interviewer_technical.md"
+prompt_template: "data/prompt/interviewer_technical.md"
 llm:
   provider: "dashscope"
   model: "qwen-max"

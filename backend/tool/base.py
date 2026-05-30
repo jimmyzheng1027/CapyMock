@@ -38,10 +38,16 @@ class ToolContext:
     """Context injected into tool execution."""
 
     session: Any = None
+    session_id: str = ""
     user_id: str = ""
     profile: Any = None
     cancel_token: Any = None
     permissions: dict = field(default_factory=dict)
+    sandbox_root: str = ""  # root directory for file tool sandboxing
+    current_repo_path: str = ""  # path to the currently cloned repo (set after clone_repo)
+    db_session: Any = None  # SQLAlchemy AsyncSession
+    repo_root: str = "storage/repo"  # root directory for cloned repos
+    repo_url: str = ""  # current repo URL (for analysis context)
 
 
 @dataclass

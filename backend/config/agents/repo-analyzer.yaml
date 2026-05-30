@@ -1,0 +1,26 @@
+id: "repo-analyzer"
+prompt_template: "data/prompt/repo_analyzer_system_prompt.md"
+llm:
+  provider: "mimo"
+  model: "mimo-v2.5-pro"
+  temperature: 0.3
+  fallback:
+    provider: "mimo"
+    model: "mimo-v2.5"
+    temperature: 0.3
+tools:
+  - read_skill
+  - clone_repo
+  - list_directory
+  - read_file
+  - search_code
+  - save_repo_analysis
+skills:
+  - "repo-analyzer"
+context:
+  max_history_tokens: 160000
+  compact_threshold: 140000
+policy:
+  max_steps: 30
+  parallel_tools: 1
+  tool_timeout: 120.0

@@ -42,6 +42,7 @@ class SessionService:
             created_at=now,
             updated_at=now,
             event_count=1,
+            resume_id=request.resume_id,
         )
         self.db.add(session)
         await self.db.commit()
@@ -144,8 +145,21 @@ class SessionService:
         )
         await self.db.commit()
 
-    async def finalize_session(self, session_id: str, summary: dict) -> FinalizeResponse:
-        """Finalize a session with a summary."""
+    async def finalize_session(
+        self,
+        session_id: str,
+        summary: dict,
+        memory_store: object | None = None,
+        finalize_data: dict | None = None,
+    ) -> FinalizeResponse:
+        """Finalize a session with a summary.
+
+        Args:
+            session_id: Session ID
+            summary: Summary dict to store
+            memory_store: Optional MemoryStore for writing memory files
+            finalize_data: Optional dict with capy_note, user_md, real_ques for memory
+        """
         result = await self.db.execute(
             select(Session).where(Session.id == session_id)
         )
@@ -173,6 +187,12 @@ class SessionService:
         )
         await self.db.commit()
 
+        # Write memory files if provided
+        if memory_store and finalize_data and session.user_id and session.resume_id:
+            self._write_memory(
+                memory_store, session.user_id, session.resume_id, finalize_data
+            )
+
         # Append summary event to JSONL
         summary_event = FrontendEvent(
             type=EventType.TURN_DONE,
@@ -185,6 +205,30 @@ class SessionService:
             session_id=session_id,
             summary=summary,
         )
+
+    def _write_memory(
+        self,
+        memory_store: object,
+        user_id: str,
+        resume_id: str,
+        finalize_data: dict,
+    ) -> None:
+        """Write memory files from finalize data."""
+        from storage.memory.store import MemoryStore
+
+        store: MemoryStore = memory_store  # type: ignore[assignment]
+
+        capy_note = finalize_data.get("capy_note", "")
+        if capy_note:
+            store.write_capy_note(user_id, resume_id, capy_note)
+
+        user_md = finalize_data.get("user_md", "")
+        if user_md:
+            store.write_user(user_id, user_md)
+
+        real_ques = finalize_data.get("real_ques", "")
+        if real_ques:
+            store.write_real_ques(user_id, resume_id, real_ques)
 
     async def pause_session(self, session_id: str) -> None:
         """Pause a session (called when WS disconnects)."""

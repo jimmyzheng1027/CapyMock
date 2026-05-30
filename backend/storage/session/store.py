@@ -17,10 +17,18 @@ class SessionStore:
         """Get the JSONL file path for a session."""
         return self.root_dir / user_id / f"{session_id}.jsonl"
 
-    def create(self, user_id: str, session_id: str, profile_id: str) -> Path:
-        """Create a new session and write the session.started event."""
+    def create(self, user_id: str, session_id: str, profile_id: str, clear_existing: bool = False) -> Path:
+        """Create a new session and write the session.started event.
+
+        Args:
+            clear_existing: If True, delete existing JSONL file before writing.
+                           Use this for re-analysis to avoid stale history.
+        """
         session_path = self._get_session_path(user_id, session_id)
         session_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if clear_existing and session_path.exists():
+            session_path.unlink()
 
         # Write session.started event
         event = FrontendEvent(

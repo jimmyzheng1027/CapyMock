@@ -16,7 +16,7 @@ services:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-${LANGFUSE_HOST:-http://langfuse-server:3000}}
-      - SQLITE_PATH=/app/data/sessions.db
+      - SQLITE_PATH=/app/data/app.db
       - JSONL_ROOT=/app/data/sessions
     volumes:
       - ./data:/app/data

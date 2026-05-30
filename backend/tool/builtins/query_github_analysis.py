@@ -1,46 +1,75 @@
+"""query_github_analysis tool — query analysis from SQL."""
+
 from __future__ import annotations
 
-from pathlib import Path
+import json
 
 from pydantic import BaseModel
+from sqlalchemy import select
 
+from storage.db.models import RepoAnalysis
 from tool.base import ToolContext, ToolResult, tool
 
 
 class QueryGithubAnalysisArgs(BaseModel):
     """Arguments for query_github_analysis tool."""
 
-    repo_id: str
+    repo_url: str = ""
 
 
 @tool
 async def query_github_analysis(args: QueryGithubAnalysisArgs, ctx: ToolContext) -> ToolResult:
-    """Query existing GitHub repository analysis results.
+    """Query existing GitHub repository analysis results from the database."""
+    if ctx.db_session is None:
+        return ToolResult.err(
+            code="no_db_session",
+            message="No database session in context",
+            summary="No DB session",
+        )
+    db = ctx.db_session
 
-    Only reads pre-existing analysis; does not trigger new analysis.
-    """
-    # For MVP, we look for analysis results in a standard location
-    analysis_path = Path("backend/data/github_analysis") / f"{args.repo_id}.json"
+    repo_url = args.repo_url
+    if not repo_url:
+        repo_url = ctx.repo_url
+    if not repo_url:
+        return ToolResult.err(
+            code="missing_arg",
+            message="repo_url is required",
+            summary="Missing repo_url",
+        )
 
-    if not analysis_path.exists():
+    result = await db.execute(
+        select(RepoAnalysis).where(RepoAnalysis.url == repo_url)
+    )
+    analysis = result.scalar_one_or_none()
+
+    if analysis is None:
         return ToolResult.err(
             code="not_found",
-            message=f"GitHub analysis not found for repo: {args.repo_id}",
-            summary=f"No analysis for {args.repo_id}",
+            message=f"GitHub analysis not found for: {repo_url}",
+            summary=f"No analysis for {repo_url}",
+        )
+
+    if analysis.status == "failed":
+        return ToolResult.err(
+            code="analysis_failed",
+            message=f"Analysis failed: {analysis.error or 'unknown error'}",
+            summary="Analysis failed — consider retrying",
+        )
+
+    if analysis.status != "done":
+        return ToolResult.err(
+            code="not_ready",
+            message=f"Analysis not ready (status={analysis.status})",
+            summary=f"Analysis status: {analysis.status}",
         )
 
     try:
-        import json
+        data = json.loads(analysis.result_json) if analysis.result_json else {}
+    except json.JSONDecodeError:
+        data = {}
 
-        content = analysis_path.read_text(encoding="utf-8")
-        analysis = json.loads(content)
-        return ToolResult.ok(
-            data={"repo_id": args.repo_id, "analysis": analysis},
-            summary=f"Loaded analysis for {args.repo_id}",
-        )
-    except Exception as e:
-        return ToolResult.err(
-            code="read_error",
-            message=f"Failed to read analysis: {str(e)}",
-            summary="Failed to read analysis",
-        )
+    return ToolResult.ok(
+        data={"repo_url": repo_url, "analysis": data, "analysis_id": analysis.id},
+        summary=f"Loaded analysis for {repo_url}",
+    )

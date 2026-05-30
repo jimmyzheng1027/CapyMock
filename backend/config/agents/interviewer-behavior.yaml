@@ -1,5 +1,5 @@
 id: "interviewer-behavior"
-prompt_template: "backend/data/prompt/interviewer_behavior.md"
+prompt_template: "data/prompt/interviewer_behavior.md"
 llm:
   provider: "dashscope"
   model: "qwen-max"

@@ -1,19 +1,18 @@
 /**
  * API service layer
- * Currently using mock adapter. Switch to real adapter when FastAPI backend is ready.
+ * GitHub analysis uses real backend; other endpoints use mock adapter.
  */
 
 import { mockAdapter } from './mock.js'
 
-const USE_MOCK = true
+// Mock adapter for non-GitHub endpoints
+async function mockRequest(path, options = {}) {
+  await new Promise((r) => setTimeout(r, 2000))
+  return mockAdapter(path, options)
+}
 
-async function request(path, options = {}) {
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 2000))
-    return mockAdapter(path, options)
-  }
-
-  // Real API call (to be implemented with FastAPI)
+// Real API call to FastAPI backend
+async function realRequest(path, options = {}) {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
@@ -23,45 +22,54 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  // GitHub analysis
+  // GitHub analysis (real backend)
   analyzeGithub(url) {
-    return request('/analysis/github', {
+    return realRequest('/analysis', {
       method: 'POST',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ repo_url: url }),
     })
   },
 
   getGithubRepos() {
-    return request('/analysis/github/repos')
+    return realRequest('/analysis')
   },
 
   getGithubRepo(id) {
-    return request(`/analysis/github/repos/${id}`)
+    return realRequest(`/analysis/${id}`)
   },
 
   getGithubDeep(id) {
-    return request(`/analysis/github/repos/${id}/deep`)
+    return realRequest(`/analysis/${id}`)
   },
 
-  // JD analysis
+  // Task progress (real backend)
+  getTaskStatus(taskId) {
+    return realRequest(`/tasks/${taskId}`)
+  },
+
+  getTaskStreamUrl(taskId) {
+    return `/api/tasks/${taskId}/stream`
+  },
+
+  // JD analysis (mock)
   analyzeJd(text) {
-    return request('/analysis/jd', {
+    return mockRequest('/analysis/jd', {
       method: 'POST',
       body: JSON.stringify({ text }),
     })
   },
 
-  // Resume analysis
+  // Resume analysis (mock)
   analyzeResume(file, position) {
-    return request('/analysis/resume', {
+    return mockRequest('/analysis/resume', {
       method: 'POST',
       body: JSON.stringify({ fileName: file.name, fileSize: file.size, position }),
     })
   },
 
-  // Interview - get AI response
+  // Interview - get AI response (mock)
   getInterviewReply(messages, type) {
-    return request('/interview/reply', {
+    return mockRequest('/interview/reply', {
       method: 'POST',
       body: JSON.stringify({ messages, type }),
     })

@@ -7,7 +7,7 @@ import CodeSnippet from '@/components/github/CodeSnippet.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 
 const route = useRoute()
-const { currentRepo, loading, fetchDeepAnalysis } = useGithubAnalysis()
+const { currentRepo, loading, phase, progressMessage, fetchDeepAnalysis } = useGithubAnalysis()
 
 const activeSection = ref('')
 let observer = null
@@ -78,11 +78,12 @@ function scrollToSection(id) {
       返回概览
     </router-link>
 
-    <div v-if="repo" class="animate-fade-in">
+    <div v-if="repo && repo.status !== 'failed'" class="animate-fade-in">
       <!-- Repo header (compact) -->
       <div class="flex items-center gap-3 mb-6">
         <h2 class="text-xl font-bold text-ink">{{ repo.fullName }}</h2>
         <div
+          v-if="repo.score"
           class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
           :style="{
             background: repo.score >= 80 ? 'var(--color-secondary)' : repo.score >= 60 ? 'var(--color-primary)' : 'var(--color-accent)',
@@ -136,9 +137,9 @@ function scrollToSection(id) {
     </div>
 
     <LoadingOverlay
-      :active="loading"
-      text="正在生成深度分析报告"
-      subtext="Capy 正在深入阅读代码、生成分析..."
+      :active="loading || phase === 'analyzing' || phase === 'submitting' || phase === 'fetching'"
+      :text="phase === 'analyzing' ? '正在分析代码仓库' : '正在生成深度分析报告'"
+      :subtext="progressMessage || 'Capy 正在深入阅读代码、生成分析...'"
     />
   </div>
 </template>

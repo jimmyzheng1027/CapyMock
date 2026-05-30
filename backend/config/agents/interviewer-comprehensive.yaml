@@ -1,5 +1,5 @@
 id: "interviewer-comprehensive"
-prompt_template: "backend/data/prompt/interviewer_comprehensive.md"
+prompt_template: "data/prompt/interviewer_comprehensive.md"
 llm:
   provider: "dashscope"
   model: "qwen-max"

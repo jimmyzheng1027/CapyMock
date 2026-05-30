@@ -20,7 +20,7 @@ class ProfileValidationError(Exception):
 class ProfileLoader:
     """Loads and validates agent profiles from YAML files."""
 
-    def __init__(self, profiles_dir: str = "backend/config/agents") -> None:
+    def __init__(self, profiles_dir: str = "config/agents") -> None:
         self.profiles_dir = Path(profiles_dir)
         self._profiles: dict[str, AgentProfile] = {}
 

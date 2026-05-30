@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 from openai import AsyncOpenAI
 
@@ -19,6 +20,17 @@ from agent.llm.events import (
 )
 
 
+@dataclass
+class _StreamToolCall:
+    """Accumulates one streamed tool call keyed by OpenAI chunk index."""
+
+    index: int
+    tool_call_id: str = ""
+    name: str = ""
+    arguments: str = ""
+    started: bool = False
+
+
 class OpenAICompatibleLLM(BaseLLM):
     """Base class for OpenAI-compatible LLM providers (Template Method pattern)."""
 
@@ -33,21 +45,62 @@ class OpenAICompatibleLLM(BaseLLM):
         self.temperature = temperature
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
+    def _on_thinking_delta(self, delta: str) -> None:
+        """Hook when reasoning/thinking content arrives. Override to accumulate per turn."""
+        return None
+
+    def _emit_tool_call_start(self, slot: _StreamToolCall) -> ToolCallStart | None:
+        if slot.started or not slot.tool_call_id or not slot.name:
+            return None
+        slot.started = True
+        return ToolCallStart(tool_call_id=slot.tool_call_id, tool_name=slot.name)
+
+    def _update_tool_slot(
+        self, tc: object, pending: dict[int, _StreamToolCall]
+    ) -> list[LLMEvent]:
+        """Apply one streamed tool_calls delta; return events to yield."""
+        events: list[LLMEvent] = []
+        index = getattr(tc, "index", None)
+        if index is None:
+            index = 0
+
+        if index not in pending:
+            pending[index] = _StreamToolCall(index=index)
+        slot = pending[index]
+
+        if getattr(tc, "id", None):
+            slot.tool_call_id = tc.id
+
+        fn = getattr(tc, "function", None)
+        if fn is None:
+            return events
+
+        if getattr(fn, "name", None):
+            slot.name = fn.name
+        start = self._emit_tool_call_start(slot)
+        if start:
+            events.append(start)
+
+        arg_delta = getattr(fn, "arguments", None)
+        if arg_delta:
+            slot.arguments += arg_delta
+            if slot.tool_call_id:
+                events.append(
+                    ToolCallArgsDelta(tool_call_id=slot.tool_call_id, delta=arg_delta)
+                )
+
+        return events
+
     async def stream(
         self,
         messages: list[dict],
         tools: list[dict] | None = None,
     ) -> AsyncIterator[LLMEvent]:
         """Stream LLM events from an OpenAI-compatible provider."""
-        # Accumulate tool call arguments across chunks
-        tool_call_args: dict[str, str] = {}
-        tool_call_names: dict[str, str] = {}
-        has_text = False
-        has_thinking = False
+        pending: dict[int, _StreamToolCall] = {}
 
         try:
             params = self._build_request_params(messages, tools)
-
             response = await self.client.chat.completions.create(**params)
 
             async for chunk in response:
@@ -56,42 +109,28 @@ class OpenAICompatibleLLM(BaseLLM):
 
                 thinking = self._extract_thinking(delta)
                 if thinking:
-                    has_thinking = True
+                    self._on_thinking_delta(thinking)
                     yield ThinkingDelta(delta=thinking)
 
                 if delta and delta.content:
-                    has_text = True
                     yield TextDelta(delta=delta.content)
 
                 if delta and delta.tool_calls:
                     for tc in delta.tool_calls:
-                        if tc.id and tc.function and tc.function.name:
-                            tool_call_id = tc.id
-                            tool_call_names[tool_call_id] = tc.function.name
-                            tool_call_args[tool_call_id] = ""
-                            yield ToolCallStart(
-                                tool_call_id=tool_call_id,
-                                tool_name=tc.function.name,
-                            )
-                        if tc.function and tc.function.arguments:
-                            tool_call_id = tc.id or ""
-                            tool_call_args[tool_call_id] = (
-                                tool_call_args.get(tool_call_id, "") + tc.function.arguments
-                            )
-                            yield ToolCallArgsDelta(
-                                tool_call_id=tool_call_id,
-                                delta=tc.function.arguments,
-                            )
+                        for event in self._update_tool_slot(tc, pending):
+                            yield event
 
                 if finish_reason:
-                    for tool_call_id, args_str in tool_call_args.items():
+                    for slot in pending.values():
+                        if not slot.tool_call_id:
+                            continue
                         try:
-                            args = json.loads(args_str) if args_str else {}
+                            args = json.loads(slot.arguments) if slot.arguments else {}
                         except json.JSONDecodeError:
                             args = {}
                         yield ToolCallEnd(
-                            tool_call_id=tool_call_id,
-                            tool_name=tool_call_names.get(tool_call_id, ""),
+                            tool_call_id=slot.tool_call_id,
+                            tool_name=slot.name,
                             args=args,
                         )
 

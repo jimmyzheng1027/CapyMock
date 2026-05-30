@@ -8,7 +8,7 @@ import yaml
 class SkillLoader:
     """Loads and parses skill definitions from SKILL.md files."""
 
-    def __init__(self, skills_dir: str = "backend/data/skill") -> None:
+    def __init__(self, skills_dir: str = "data/skill") -> None:
         self.skills_dir = Path(skills_dir)
         self._skills: dict[str, dict] = {}
 

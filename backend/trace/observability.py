@@ -9,6 +9,11 @@ from typing import Any, Protocol
 
 from config.settings import settings
 
+# Suppress noisy OpenTelemetry "Failed to detach context" warnings
+# that occur when async generators are garbage-collected in a different
+# async context than where the span was created.
+logging.getLogger("opentelemetry.context").setLevel(logging.CRITICAL)
+
 logger = logging.getLogger(__name__)
 
 _client_initialized = False

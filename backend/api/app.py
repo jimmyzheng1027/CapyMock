@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     # Load profiles
-    profile_loader = ProfileLoader("backend/config/agents")
+    profile_loader = ProfileLoader("config/agents")
     profiles = profile_loader.load_all()
     print(f"Loaded {len(profiles)} agent profiles")
 
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     print(f"Registered {len(tool_registry.all())} tools")
 
     # Initialize skill loader
-    skill_loader = SkillLoader("backend/data/skill")
+    skill_loader = SkillLoader("data/skill")
     skills = skill_loader.load_all()
     print(f"Loaded {len(skills)} skills")
 

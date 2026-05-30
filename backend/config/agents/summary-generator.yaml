@@ -1,5 +1,5 @@
 id: "summary-generator"
-prompt_template: "backend/data/prompt/summary_generator.md"
+prompt_template: "data/prompt/summary_generator.md"
 llm:
   provider: "dashscope"
   model: "qwen-max"

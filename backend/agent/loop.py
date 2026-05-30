@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 
 from agent.context.builder import ContextBuilder
 from agent.context.compactor import ContextCompactor
@@ -76,6 +76,12 @@ class ReActAgent:
         self.state = AgentState.IDLE
         self._text_buffer: list[str] = []
         self._current_tool_calls: list[ToolCall] = []
+        self._session_obj: object | None = None
+        self._repo_url: str = ""
+        self._sandbox_root: str = ""
+        self._current_repo_path: str = ""
+        self._db_session: object | None = None
+        self._repo_root: str = ""
 
     async def run(self, user_input: str) -> AsyncIterator[FrontendEvent]:
         """Run the ReAct loop for a user input.
@@ -134,6 +140,8 @@ class ReActAgent:
                     self._react_should_continue = False
                     self._text_buffer = []
                     self._current_tool_calls = []
+                    if hasattr(self.llm, "begin_stream_turn"):
+                        self.llm.begin_stream_turn()
                     async for fe in self._process_llm_events(
                         messages, self._stream_llm(messages)
                     ):
@@ -223,10 +231,12 @@ class ReActAgent:
             elif isinstance(event, Done):
                 if event.stop_reason == "tool_use":
                     yield self._make_state_event(AgentState.EXECUTING_TOOLS)
-                    tool_results = await self._execute_tools()
-                    for result_event in tool_results:
-                        yield result_event
-                    messages.extend(self._build_tool_messages(tool_results))
+                    messages.append(self._build_assistant_tool_use_message())
+                    async for msg in self._execute_tools_sequential():
+                        if isinstance(msg, FrontendEvent):
+                            yield msg
+                        else:
+                            messages.append(msg)
                     yield self._make_state_event(AgentState.AGGREGATING)
                     self._react_should_continue = True
                 else:
@@ -290,10 +300,16 @@ class ReActAgent:
         """Execute tool calls and return result events."""
         def ctx_factory(call: ToolCall) -> ToolContext:
             return ToolContext(
-                session=None,  # Will be populated by session service
+                session=self._session_obj,
+                session_id=self.session_id,
                 user_id=self.user_id,
                 profile=self.profile,
                 cancel_token=self.cancel_token,
+                sandbox_root=self._sandbox_root,
+                current_repo_path=self._current_repo_path,
+                db_session=self._db_session,
+                repo_root=self._repo_root,
+                repo_url=self._repo_url,
             )
 
         async def execute_one(call: ToolCall) -> ToolResult:
@@ -318,6 +334,16 @@ class ReActAgent:
 
         events = []
         for call, result in zip(self._current_tool_calls, results):
+            # Track repo_path from clone_repo results
+            if (
+                call.tool_name == "clone_repo"
+                and result.status == "ok"
+                and result.data
+            ):
+                repo_path = result.data.get("repo_path")
+                if repo_path:
+                    self._current_repo_path = repo_path
+
             # Tool call end event
             events.append(FrontendEvent(
                 type=EventType.TOOL_CALL_END,
@@ -341,6 +367,110 @@ class ReActAgent:
             ))
 
         return events
+
+    async def _execute_tools_sequential(
+        self,
+    ) -> AsyncIterator[FrontendEvent | dict]:
+        """Execute tool calls one by one, yielding events and tool messages.
+
+        Yields FrontendEvent for frontend display, and dict messages for the
+        LLM context. This ensures each tool result is visible before the next
+        tool call, so the agent can react to failures.
+        """
+        for call in self._current_tool_calls:
+            with trace_tool(name=call.tool_name, args=call.args) as tool_span:
+                batch = await self.tool_executor.run_parallel(
+                    [call],
+                    self._make_ctx_factory(),
+                    self.tools,
+                    parallel_limit=1,
+                    cancel_token=self.cancel_token,
+                )
+                result = batch[0]
+                tool_span.update(
+                    output=tool_result_output(result),
+                    level=span_level_for_result(result),
+                )
+
+            # Track repo_path from clone_repo results
+            if (
+                call.tool_name == "clone_repo"
+                and result.status == "ok"
+                and result.data
+            ):
+                repo_path = result.data.get("repo_path")
+                if repo_path:
+                    self._current_repo_path = repo_path
+
+            yield FrontendEvent(
+                type=EventType.TOOL_CALL_END,
+                payload={
+                    "tool_call_id": call.tool_call_id,
+                    "tool_name": call.tool_name,
+                },
+            )
+            yield FrontendEvent(
+                type=EventType.TOOL_RESULT,
+                payload={
+                    "tool_call_id": call.tool_call_id,
+                    "tool_name": call.tool_name,
+                    "status": result.status,
+                    "data": result.data,
+                    "error": result.error,
+                    "summary": result.summary,
+                },
+            )
+            yield {
+                "role": "tool",
+                "tool_call_id": call.tool_call_id,
+                "content": json.dumps(
+                    result.data if result.status == "ok" else result.error
+                ),
+            }
+
+    def _build_assistant_tool_use_message(self) -> dict:
+        """Build assistant message with tool_calls for the next LLM turn."""
+        text = "".join(self._text_buffer).strip()
+        tool_calls_payload = [
+            {
+                "id": call.tool_call_id,
+                "type": "function",
+                "function": {
+                    "name": call.tool_name,
+                    "arguments": json.dumps(call.args, ensure_ascii=False),
+                },
+            }
+            for call in self._current_tool_calls
+        ]
+        msg: dict = {
+            "role": "assistant",
+            "content": text if text else None,
+            "tool_calls": tool_calls_payload,
+        }
+        if hasattr(self.llm, "consume_reasoning_for_message"):
+            reasoning = self.llm.consume_reasoning_for_message()
+            if reasoning:
+                msg["reasoning_content"] = reasoning
+        return msg
+
+    def _make_ctx_factory(self) -> Callable[[ToolCall], ToolContext]:
+        """Create a context factory for tool execution."""
+
+        def ctx_factory(_call: ToolCall) -> ToolContext:
+            return ToolContext(
+                session=self._session_obj,
+                session_id=self.session_id,
+                user_id=self.user_id,
+                profile=self.profile,
+                cancel_token=self.cancel_token,
+                sandbox_root=self._sandbox_root,
+                current_repo_path=self._current_repo_path,
+                db_session=self._db_session,
+                repo_root=self._repo_root,
+                repo_url=self._repo_url,
+            )
+
+        return ctx_factory
 
     def _build_tool_messages(self, result_events: list[FrontendEvent]) -> list[dict]:
         """Build tool result messages for the next LLM call."""

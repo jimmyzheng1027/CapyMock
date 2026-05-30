@@ -1,10 +1,11 @@
+"""read_resume tool — read resume content from SQL."""
+
 from __future__ import annotations
 
-from pathlib import Path
-
 from pydantic import BaseModel
+from sqlalchemy import select
 
-from config.settings import settings
+from storage.db.models import Resume
 from tool.base import ToolContext, ToolResult, tool
 
 
@@ -16,7 +17,7 @@ class ReadResumeArgs(BaseModel):
 
 @tool
 async def read_resume(args: ReadResumeArgs, ctx: ToolContext) -> ToolResult:
-    """Read a user's resume by ID. Returns the resume content."""
+    """Read a user's resume by ID from the database."""
     user_id = ctx.user_id
     if not user_id:
         return ToolResult.err(
@@ -25,28 +26,27 @@ async def read_resume(args: ReadResumeArgs, ctx: ToolContext) -> ToolResult:
             summary="No user ID",
         )
 
-    resume_path = Path(settings.RESUME_ROOT) / user_id / f"{args.resume_id}.md"
+    if ctx.db_session is None:
+        return ToolResult.err(
+            code="no_db_session",
+            message="No database session in context",
+            summary="No DB session",
+        )
+    db = ctx.db_session
 
-    if not resume_path.exists():
-        # Try .txt extension
-        resume_path = Path(settings.RESUME_ROOT) / user_id / f"{args.resume_id}.txt"
+    result = await db.execute(
+        select(Resume).where(Resume.id == args.resume_id, Resume.user_id == user_id)
+    )
+    resume = result.scalar_one_or_none()
 
-    if not resume_path.exists():
+    if resume is None:
         return ToolResult.err(
             code="not_found",
             message=f"Resume not found: {args.resume_id}",
             summary=f"Resume not found: {args.resume_id}",
         )
 
-    try:
-        content = resume_path.read_text(encoding="utf-8")
-        return ToolResult.ok(
-            data={"content": content, "resume_id": args.resume_id},
-            summary=f"Read resume {args.resume_id}",
-        )
-    except Exception as e:
-        return ToolResult.err(
-            code="read_error",
-            message=f"Failed to read resume: {str(e)}",
-            summary="Failed to read resume",
-        )
+    return ToolResult.ok(
+        data={"content": resume.content, "resume_id": args.resume_id},
+        summary=f"Read resume {args.resume_id}",
+    )

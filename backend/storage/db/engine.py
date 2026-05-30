@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import os
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from config.settings import settings
 from storage.db.models import Base
 
+# Ensure parent directory exists
+_db_path = os.path.abspath(settings.SQLITE_PATH)
+os.makedirs(os.path.dirname(_db_path), exist_ok=True)
+
 # Create async engine
 engine = create_async_engine(
-    f"sqlite+aiosqlite:///{settings.SQLITE_PATH}",
+    f"sqlite+aiosqlite:///{_db_path.replace(os.sep, '/')}",
     echo=False,
 )
 

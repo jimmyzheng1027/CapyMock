@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useGithubAnalysis } from '@/composables/useGithubAnalysis.js'
 import ScoreRing from '@/components/common/ScoreRing.vue'
@@ -8,11 +8,32 @@ import DirectoryTree from '@/components/github/DirectoryTree.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 
 const route = useRoute()
-const { currentRepo: repo, loading, fetchRepo } = useGithubAnalysis()
+const { currentRepo: repo, loading, error, phase, progress, progressMessage, activeTaskId, fetchRepo, reconnectTask, analyzeNewRepo } = useGithubAnalysis()
+
+const isAnalyzing = computed(() => phase.value === 'analyzing' || phase.value === 'submitting' || phase.value === 'fetching')
+const overlayText = computed(() => {
+  if (phase.value === 'submitting') return '正在提交分析请求'
+  if (phase.value === 'analyzing') return '正在分析代码仓库'
+  if (phase.value === 'fetching') return '正在加载分析结果'
+  return '正在加载仓库数据'
+})
 
 onMounted(() => {
-  fetchRepo(route.params.id)
+  if (activeTaskId.value === route.params.id && (phase.value === 'analyzing' || phase.value === 'submitting')) {
+    // Task already in progress via composable, SSE is running — just wait
+    reconnectTask(route.params.id)
+  } else {
+    fetchRepo(route.params.id)
+  }
 })
+
+async function handleRetry() {
+  if (!repo.value?.url) return
+  const result = await analyzeNewRepo(repo.value.url)
+  if (result?.id) {
+    // SSE will update currentRepo when done
+  }
+}
 </script>
 
 <template>
@@ -27,6 +48,31 @@ onMounted(() => {
     </router-link>
 
     <div v-if="repo" class="animate-fade-in">
+      <!-- Failed state -->
+      <div v-if="repo.status === 'failed'" class="text-center py-12">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-red-500">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h3 class="text-lg font-bold text-ink mb-2">分析失败</h3>
+        <p class="text-sm text-ink-muted mb-6 max-w-md mx-auto">
+          {{ repo.error || '分析过程中出现错误，请重试' }}
+        </p>
+        <div class="flex items-center justify-center gap-3">
+          <button class="btn btn--primary text-sm" @click="handleRetry">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 1 1 12 0A6 6 0 0 1 2 8z" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            重新分析
+          </button>
+          <router-link to="/analysis/github" class="btn text-sm text-ink-muted hover:text-ink">
+            返回列表
+          </router-link>
+        </div>
+      </div>
+
+      <!-- Success state -->
+      <template v-else>
       <!-- Repo header -->
       <div class="flex items-start justify-between mb-6">
         <div>
@@ -46,6 +92,7 @@ onMounted(() => {
 
       <!-- Score -->
       <ScoreRing
+        v-if="repo.score"
         :score="repo.score"
         label="项目综合评分"
         :summary="`仓库 ${repo.fullName} 综合评估`"
@@ -110,12 +157,28 @@ onMounted(() => {
           查看深度分析报告
         </router-link>
       </div>
+      </template>
+    </div>
+
+    <!-- Error state (analysis failed during this session) -->
+    <div v-else-if="error && !loading && !isAnalyzing" class="text-center py-12 animate-fade-in">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-red-500">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h3 class="text-lg font-bold text-ink mb-2">分析失败</h3>
+      <p class="text-sm text-ink-muted mb-6 max-w-md mx-auto">{{ error }}</p>
+      <router-link to="/analysis/github" class="btn btn--primary text-sm">
+        返回列表
+      </router-link>
     </div>
 
     <LoadingOverlay
-      :active="loading"
-      text="正在加载仓库数据"
-      subtext="Capy 正在整理分析结果..."
+      :active="loading || isAnalyzing"
+      :text="overlayText"
+      :subtext="progressMessage || 'Capy 正在整理分析结果...'"
     />
   </div>
 </template>

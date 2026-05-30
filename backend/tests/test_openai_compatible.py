@@ -41,6 +41,23 @@ def make_mock_chunk(
     return chunk
 
 
+def make_tool_delta(
+    *,
+    index: int = 0,
+    tool_id: str | None = None,
+    name: str | None = None,
+    arguments: str | None = None,
+) -> MagicMock:
+    """Tool call delta (arguments chunks often omit id; use index)."""
+    tc = MagicMock()
+    tc.index = index
+    tc.id = tool_id
+    tc.function = MagicMock()
+    tc.function.name = name
+    tc.function.arguments = arguments
+    return tc
+
+
 class MockAsyncIterator:
     """Helper to create a proper async iterator from a list."""
 
@@ -98,10 +115,12 @@ class TestOpenAICompatibleLLM:
     @pytest.mark.asyncio
     async def test_single_tool_call(self, llm: OpenAICompatibleLLM) -> None:
         """Test: single tool call in response."""
-        tool_call = MagicMock()
-        tool_call.id = "call_1"
-        tool_call.function = MagicMock(name="read_resume", arguments='{"resume_id": "r1"}')
-        tool_call.function.name = "read_resume"
+        tool_call = make_tool_delta(
+            index=0,
+            tool_id="call_1",
+            name="read_resume",
+            arguments='{"resume_id": "r1"}',
+        )
 
         usage_mock = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
@@ -131,15 +150,18 @@ class TestOpenAICompatibleLLM:
     @pytest.mark.asyncio
     async def test_multiple_tool_calls(self, llm: OpenAICompatibleLLM) -> None:
         """Test: multiple concurrent tool calls."""
-        tc1 = MagicMock()
-        tc1.id = "call_1"
-        tc1.function = MagicMock(name="read_resume", arguments='{"id": "r1"}')
-        tc1.function.name = "read_resume"
-
-        tc2 = MagicMock()
-        tc2.id = "call_2"
-        tc2.function = MagicMock(name="take_note", arguments='{"note": "test"}')
-        tc2.function.name = "take_note"
+        tc1 = make_tool_delta(
+            index=0,
+            tool_id="call_1",
+            name="read_resume",
+            arguments='{"id": "r1"}',
+        )
+        tc2 = make_tool_delta(
+            index=1,
+            tool_id="call_2",
+            name="take_note",
+            arguments='{"note": "test"}',
+        )
 
         usage_mock = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
@@ -161,6 +183,43 @@ class TestOpenAICompatibleLLM:
         assert isinstance(events[6], Usage)
         assert isinstance(events[7], Done)
         assert events[7].stop_reason == "tool_use"
+
+    @pytest.mark.asyncio
+    async def test_fragmented_tool_arguments_by_index(self, llm: OpenAICompatibleLLM) -> None:
+        """Arguments split across chunks without id must still parse."""
+        usage_mock = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+        chunks = [
+            make_mock_chunk(
+                tool_calls=[
+                    make_tool_delta(
+                        index=0,
+                        tool_id="call_abc",
+                        name="read_file",
+                        arguments="",
+                    )
+                ],
+            ),
+            make_mock_chunk(
+                tool_calls=[make_tool_delta(index=0, arguments='{"path":')],
+            ),
+            make_mock_chunk(
+                tool_calls=[make_tool_delta(index=0, arguments=' "README.md"}')],
+            ),
+            make_mock_chunk(finish_reason="tool_calls", usage=usage_mock),
+        ]
+
+        llm.client.chat.completions.create = AsyncMock(
+            return_value=MockAsyncIterator(chunks)
+        )
+
+        events = []
+        async for event in llm.stream([{"role": "user", "content": "Read"}]):
+            events.append(event)
+
+        tool_ends = [e for e in events if isinstance(e, ToolCallEnd)]
+        assert len(tool_ends) == 1
+        assert tool_ends[0].tool_call_id == "call_abc"
+        assert tool_ends[0].args == {"path": "README.md"}
 
     @pytest.mark.asyncio
     async def test_thinking_chain(self, llm: OpenAICompatibleLLM) -> None:
