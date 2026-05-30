@@ -10,46 +10,52 @@ description: |
 
 ## Workflow
 
-The analysis has 4 phases. Follow them in order. Do not skip ahead.
+The analysis has 5 phases. Follow them in order. Do not skip ahead.
+
+**Cache:** Completed analyses are checked by the API before this agent runs. If you are invoked, proceed with a fresh analysis — do not call `query_github_analysis`.
+
+### Phase 0: Load this skill
+
+If you have not already loaded the full workflow in this session, call:
+
+```
+read_skill(skill_id="repo-analyzer")
+```
+
+Follow the returned content for all phases below.
 
 ### Phase 1: Clone the Repository
 
-Use `run_command` to shallow clone:
+Use `clone_repo` to shallow clone the repository:
 
 ```
-run_command("git clone --depth 1 <repo-url> /tmp/repo-analysis-<random>")
+clone_repo(analysis_id="<id>", url="<repo-url>")
 ```
 
 If clone fails, report the error and stop. Do not attempt to guess repository contents.
+
+On success, the result contains `repo_path` for logging only. **All file tools automatically scope to that clone** — use paths **relative to the repository root** from here on (not the `storage/repo/...` prefix).
 
 ### Phase 2: Scan Metadata
 
 Gather high-level project information. This phase gives you the context needed to make smart decisions in Phase 3.
 
-**2a. Directory structure**
-
-Use `run_command` to get the full directory tree:
+**2a + 2b: Batch these calls together.** `list_directory`, config file, and README have no dependencies — call them all in one turn:
 
 ```
-run_command("find /tmp/repo-analysis-xxx -type f -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/vendor/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/__pycache__/*' -not -path '*/.venv/*' | head -500")
+list_directory(path=".", max_depth=5)
+read_file(path="pyproject.toml")   # or package.json, go.mod, etc.
+read_file(path="README.md")
 ```
 
-Also run:
-```
-run_command("find /tmp/repo-analysis-xxx -type f -not -path '*/.git/*' | sed 's/.*\\.//' | sort | uniq -c | sort -rn | head -20")
-```
-This gives you file extension distribution to identify the primary language.
+The `list_directory` response includes a `directoryTree` field with the structured tree. Use this directly — do NOT recreate the tree yourself.
 
-**2b. Project config and README**
-
-Read the primary config file to understand dependencies and project metadata:
+For the config file, pick the primary one based on language:
 - Python: `pyproject.toml`, `setup.py`, `requirements.txt`
 - Node/JS/TS: `package.json`
 - Go: `go.mod`
 - Rust: `Cargo.toml`
 - Java: `pom.xml`, `build.gradle`
-
-Read `README.md` (or `readme.md`) to understand the project's purpose.
 
 ### Phase 3: Read Key Files (LLM-Driven Selection)
 
@@ -67,7 +73,16 @@ Prioritize in this order:
 5. **Configuration / middleware / plugins** — how is the app configured and extended?
 6. **Test examples** — 1-2 test files that show testing patterns and conventions
 
-Read **15-25 files** total. Use `read_file` for each. Read the full file — do not truncate. If a file is extremely long (>500 lines), read the first 300 lines, which usually contains the key interfaces and patterns.
+Read **15-25 files** total. Use `read_file` with paths **relative to the repo root** (e.g. `src/main.py`, not `storage/repo/<id>/src/main.py`). Read the full file — do not truncate. If a file is extremely long (>500 lines), read the first 300 lines, which usually contains the key interfaces and patterns.
+
+**Batch reads: 3-5 files per turn.** Select your files first, then call multiple `read_file` in one turn. This reduces steps from ~20 to ~5. Example:
+
+```
+read_file(path="src/main.py")
+read_file(path="src/routes.py")
+read_file(path="src/models.py")
+read_file(path="src/config.py")
+```
 
 **Avoid reading:**
 - Lock files (package-lock.json, yarn.lock, poetry.lock, Cargo.lock)
@@ -83,6 +98,18 @@ Read **15-25 files** total. Use `read_file` for each. Read the full file — do 
 Using all the information gathered (metadata + file contents), produce a single JSON output.
 
 Think through each layer carefully before writing. Do not rush.
+
+### Phase 5: Save the Result
+
+After producing the JSON output in Phase 4, save it to the database:
+
+```
+save_repo_analysis(analysis_id="<analysis-id>", result_json="<your-json-output>")
+```
+
+Use the same `analysis_id` that was used for `clone_repo`. The `result_json` should be the complete JSON string from Phase 4.
+
+If save fails, include the error in your output but do not re-attempt.
 
 ---
 
@@ -115,25 +142,7 @@ The output has two levels: **overview** and **deep**. Always produce both.
 
 - `techTags`: List 4-8 key technologies. Include language, framework, major libraries, build tools, testing frameworks.
 
-- `directoryTree`: A nested object representing the project structure. Use this exact format:
-  ```json
-  {
-    "name": "repo-name",
-    "type": "folder",
-    "expanded": true,
-    "children": [
-      {
-        "name": "src",
-        "type": "folder",
-        "children": [
-          { "name": "App.tsx", "type": "file", "language": "tsx" }
-        ]
-      },
-      { "name": "package.json", "type": "file", "language": "json" }
-    ]
-  }
-  ```
-  Prune to 3 levels deep. Include the most important directories and files. Exclude node_modules, .git, dist, build, vendor.
+- `directoryTree`: Use the `directoryTree` from the `list_directory` tool response directly. Do NOT recreate it.
 
 - `highlights`: 3-5 notable strengths of the project. Each item:
   ```json
@@ -225,10 +234,7 @@ The `a` field is a brief answer hint — key points the candidate should cover. 
 
 ## Cleanup
 
-After outputting the JSON, clean up:
-```
-run_command("rm -rf /tmp/repo-analysis-<suffix>")
-```
+After outputting the JSON, the cloned source is retained in `storage/repo/<id>/` for potential reuse. Do NOT delete it.
 
 ---
 
@@ -249,3 +255,10 @@ When encountering an error, still output valid JSON:
   "url": "https://github.com/..."
 }
 ```
+
+## Large Repository Protection
+
+If the repository has many files (>5000), proceed with caution:
+- Use a smaller `max_depth` (2 instead of 3) for `list_directory`
+- Be more selective in Phase 3 (read fewer files)
+- Warn about the repository size in `suggestions`
