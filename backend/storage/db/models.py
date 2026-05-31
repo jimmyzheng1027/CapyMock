@@ -28,6 +28,7 @@ class Session(Base):
     turn_count = Column(Integer, nullable=False, default=0)
     summary = Column(Text, nullable=True)  # JSON string of summary dict
     resume_id = Column(String, ForeignKey("resumes.id"), nullable=True, index=True)
+    github_repo_ids = Column(Text, nullable=True)  # JSON array of repo analysis IDs
 
 
 class RepoAnalysis(Base):

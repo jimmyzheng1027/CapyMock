@@ -5,6 +5,16 @@ export const INTERVIEW_TYPES = {
   comprehensive: '综合面试'
 }
 
+export const PROFILE_TO_TYPE = {
+  'interviewer-technical': 'technical',
+  'interviewer-behavior': 'behavioral',
+  'interviewer-comprehensive': 'comprehensive',
+}
+
+export const TYPE_TO_PROFILE = Object.fromEntries(
+  Object.entries(PROFILE_TO_TYPE).map(([k, v]) => [v, k])
+)
+
 export const INTERVIEW_STATUS = {
   completed: '已完成',
   paused: '已暂停'

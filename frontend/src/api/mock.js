@@ -1,5 +1,3 @@
-import { interviewQuestions } from '@/data/interviewQuestions.js'
-
 const techTags = ['React', 'TypeScript', 'Node.js', 'Vite', 'Tailwind CSS', 'Jest', 'REST API', 'Git']
 
 const githubQuestions = [
@@ -705,103 +703,6 @@ export function mockAdapter(path, options = {}) {
     }
   }
 
-  if (path === '/interview/reply') {
-    const body = JSON.parse(options.body || '{}')
-    const type = body.type || 'technical'
-    const questions = interviewQuestions[type] || interviewQuestions.technical
-    const idx = Math.floor(Math.random() * questions.length)
-    return { content: questions[idx] }
-  }
-
-  // Interview list
-  if (path === '/interviews' && (!options.method || options.method === 'GET')) {
-    return [
-      {
-        id: 1,
-        type: 'comprehensive',
-        resume: '前端工程师_简历.pdf',
-        projects: ['job-seeker-assistant'],
-        duration: 15,
-        status: 'completed',
-        date: '2026-05-23',
-        summary: {
-          highlights: ['Vue组件化组织清晰', '对状态管理的理解准确'],
-          improvements: ['性能优化回答可更具体', '建议深入学习Vue3响应式原理']
-        }
-      },
-      {
-        id: 2,
-        type: 'technical',
-        resume: '前端工程师_简历.pdf',
-        projects: ['my-portfolio'],
-        duration: 22,
-        status: 'paused',
-        date: '2026-05-22',
-        progress: {
-          answered: 3,
-          totalQuestions: 8
-        }
-      },
-      {
-        id: 3,
-        type: 'behavioral',
-        resume: '我的简历_v2.pdf',
-        projects: [],
-        duration: 10,
-        status: 'completed',
-        date: '2026-05-21',
-        summary: {
-          highlights: ['回答有条理', '团队协作经验丰富'],
-          improvements: ['可以更多举例说明', '表达可以更简洁']
-        }
-      }
-    ]
-  }
-
-  // Get single interview
-  const interviewMatch = path.match(/^\/interviews\/(\d+)$/)
-  if (interviewMatch && (!options.method || options.method === 'GET')) {
-    const id = parseInt(interviewMatch[1])
-    const interviews = [
-      {
-        id: 1,
-        type: 'comprehensive',
-        resume: '前端工程师_简历.pdf',
-        projects: ['job-seeker-assistant'],
-        duration: 15,
-        status: 'completed',
-        date: '2026-05-23',
-        messages: [
-          { id: 1, role: 'ai', content: '你好！我看到你简历上有 React 项目经验，能介绍一下你在项目中遇到的最大技术挑战吗？', isFollowUp: false },
-          { id: 2, role: 'user', content: '我在项目中遇到了性能问题，主要是长列表渲染卡顿。', isFollowUp: false },
-          { id: 3, role: 'ai', content: '很好，你具体用了哪些优化手段？虚拟列表还是其他方案？', isFollowUp: false },
-          { id: 4, role: 'user', content: '我使用了react-window实现虚拟列表，同时配合useMemo缓存计算结果。', isFollowUp: false },
-          { id: 5, role: 'ai', content: '能具体说说你是怎么决定使用react-window的吗？有没有考虑过其他方案？', isFollowUp: true }
-        ],
-        summary: {
-          overview: {
-            type: 'comprehensive',
-            duration: 15,
-            questionCount: 5,
-            resume: '前端工程师_简历.pdf',
-            projects: ['job-seeker-assistant']
-          },
-          highlights: ['Vue组件化组织清晰，提到了合理的目录结构', '对状态管理的理解准确，能结合项目说明', '回答有条理，逻辑清晰'],
-          improvements: ['关于性能优化的回答可以更具体，举实际例子', '建议深入学习Vue3的响应式原理', '可以多练习系统设计类问题的表达'],
-          messages: [
-            { id: 1, role: 'ai', content: '你好！我看到你简历上有 React 项目经验，能介绍一下你在项目中遇到的最大技术挑战吗？', isFollowUp: false },
-            { id: 2, role: 'user', content: '我在项目中遇到了性能问题，主要是长列表渲染卡顿。', isFollowUp: false },
-            { id: 3, role: 'ai', content: '很好，你具体用了哪些优化手段？虚拟列表还是其他方案？', isFollowUp: false },
-            { id: 4, role: 'user', content: '我使用了react-window实现虚拟列表，同时配合useMemo缓存计算结果。', isFollowUp: false },
-            { id: 5, role: 'ai', content: '能具体说说你是怎么决定使用react-window的吗？有没有考虑过其他方案？', isFollowUp: true }
-          ]
-        }
-      }
-    ]
-    return interviews.find(i => i.id === id) || interviews[0]
-  }
-
   return {}
 }
 
-export { interviewQuestions }

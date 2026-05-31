@@ -20,6 +20,12 @@ const routes = [
     meta: { title: '面试配置 — CapyMock' },
   },
   {
+    path: '/interview/:id/summary',
+    name: 'interview-summary',
+    component: () => import('@/pages/InterviewSummaryPage.vue'),
+    meta: { title: '面试总结 — CapyMock' },
+  },
+  {
     path: '/interview/:id',
     name: 'interview-session',
     component: () => import('@/pages/InterviewSessionPage.vue'),

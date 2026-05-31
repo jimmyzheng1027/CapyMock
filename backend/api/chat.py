@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from agent.factory import AgentFactory
 from agent.loop import CancelToken
 from api.deps import get_agent_factory, get_session_store
 from api.schemas import EventType, FrontendEvent
+from storage.db.engine import async_session_factory
+from storage.db.models import RepoAnalysis, Resume, Session
 from storage.session.store import SessionStore
 
 logger = logging.getLogger(__name__)
@@ -50,6 +54,56 @@ def _get_or_create_session_state(session_id: str) -> dict:
     return _active_sessions[session_id]
 
 
+async def _load_session_context(session_id: str) -> dict:
+    """Load session metadata, resume content, and repo analyses from DB.
+
+    Returns dict with user_id, profile_id, resume_id, resume_content, github_repos.
+    Raises HTTPException if session not found.
+    """
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(Session).where(Session.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        ctx = {
+            "user_id": session.user_id,
+            "profile_id": session.profile_id,
+            "resume_id": session.resume_id,
+            "resume_content": "",
+            "github_repos": [],
+        }
+
+        # Load resume content if available
+        if session.resume_id:
+            resume_result = await db.execute(
+                select(Resume).where(Resume.id == session.resume_id)
+            )
+            resume = resume_result.scalar_one_or_none()
+            if resume and resume.content:
+                ctx["resume_content"] = resume.content
+
+        # Load GitHub repo analyses if available
+        if session.github_repo_ids:
+            repo_ids = json.loads(session.github_repo_ids)
+            if repo_ids:
+                repo_result = await db.execute(
+                    select(RepoAnalysis).where(
+                        RepoAnalysis.id.in_(repo_ids),
+                        RepoAnalysis.status == "done",
+                    )
+                )
+                repos = repo_result.scalars().all()
+                ctx["github_repos"] = [
+                    r.result_json for r in repos if r.result_json
+                ]
+
+    return ctx
+
+
 @router.post("/sessions/{session_id}/messages")
 async def send_message(
     session_id: str,
@@ -60,10 +114,13 @@ async def send_message(
     """Send a user message and trigger agent processing (for SSE stream)."""
     state = _get_or_create_session_state(session_id)
 
-    # Get session info
-    events = session_store.read_events("default", session_id)
+    # Load session context from DB
+    ctx = await _load_session_context(session_id)
+
+    # Get session events
+    events = session_store.read_events(ctx["user_id"], session_id)
     if not events:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session has no events")
 
     # Create user event
     user_event = FrontendEvent(
@@ -72,7 +129,7 @@ async def send_message(
     )
 
     # Append to session
-    session_store.append_event("default", session_id, user_event)
+    session_store.append_event(ctx["user_id"], session_id, user_event)
 
     # Put user event in queue for SSE
     await state["event_queue"].put(user_event)
@@ -82,19 +139,25 @@ async def send_message(
         state["is_running"] = True
         state["cancel_token"] = CancelToken()
 
-        # Create agent
+        # Create agent with actual session context
         try:
             agent = agent_factory.create(
-                profile_id="interviewer-technical",
+                profile_id=ctx["profile_id"],
                 session_id=session_id,
                 mode="text",
-                user_id="default",
+                user_id=ctx["user_id"],
+                resume_content=ctx["resume_content"],
+                github_repos=ctx["github_repos"],
+                resume_id=ctx["resume_id"],
             )
             agent.cancel_token = state["cancel_token"]
 
             # Run agent in background
             asyncio.create_task(
-                _run_agent(agent, request.text, state, session_store, session_id)
+                _run_agent(
+                    agent, request.text, state, session_store,
+                    session_id, ctx["user_id"],
+                )
             )
         except Exception as e:
             state["is_running"] = False
@@ -111,25 +174,31 @@ async def chat(
     session_store: SessionStore = Depends(get_session_store),
 ):
     """Synchronous chat - wait for complete response."""
-    # Get session info
-    events = session_store.read_events("default", session_id)
+    # Load session context from DB
+    ctx = await _load_session_context(session_id)
+
+    # Get session events
+    events = session_store.read_events(ctx["user_id"], session_id)
     if not events:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session has no events")
 
     # Create user event
     user_event = FrontendEvent(
         type=EventType.USER_TEXT,
         payload={"text": request.text},
     )
-    session_store.append_event("default", session_id, user_event)
+    session_store.append_event(ctx["user_id"], session_id, user_event)
 
-    # Create agent
+    # Create agent with actual session context
     try:
         agent = agent_factory.create(
-            profile_id="interviewer-technical",
+            profile_id=ctx["profile_id"],
             session_id=session_id,
             mode="text",
-            user_id="default",
+            user_id=ctx["user_id"],
+            resume_content=ctx["resume_content"],
+            github_repos=ctx["github_repos"],
+            resume_id=ctx["resume_id"],
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -144,7 +213,7 @@ async def chat(
 
             # Persist events that should be saved
             if session_store._should_persist(event):
-                session_store.append_event("default", session_id, event)
+                session_store.append_event(ctx["user_id"], session_id, event)
 
             # Capture the final text
             if event.type == EventType.ASSISTANT_TEXT_DONE:
@@ -165,6 +234,7 @@ async def _run_agent(
     state: dict,
     session_store: SessionStore,
     session_id: str,
+    user_id: str,
 ):
     """Run agent and put events in queue."""
     try:
@@ -177,7 +247,7 @@ async def _run_agent(
 
             # Persist events that should be saved
             if session_store._should_persist(event):
-                session_store.append_event("default", session_id, event)
+                session_store.append_event(user_id, session_id, event)
     except Exception as e:
         logger.error(f"Agent error: {e}")
         error_event = FrontendEvent(
@@ -207,13 +277,17 @@ async def stream_events(
     """SSE endpoint for streaming events."""
     state = _get_or_create_session_state(session_id)
 
-    async def event_generator() -> AsyncIterator[str]:
-        # First, replay existing events
-        events = session_store.read_events("default", session_id)
-        for event in events:
-            yield f"data: {event.model_dump_json()}\n\n"
+    # Load session to get actual user_id
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(Session).where(Session.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        # Then stream new events from queue
+    async def event_generator() -> AsyncIterator[str]:
+        # Stream new events only; history is loaded via GET /sessions/{id}/events
         while True:
             try:
                 # Wait for event with timeout
@@ -229,6 +303,9 @@ async def stream_events(
             except TimeoutError:
                 # Send keepalive
                 yield ": keepalive\n\n"
+            except (asyncio.CancelledError, ConnectionResetError, OSError):
+                # Client disconnected — stop cleanly
+                break
             except Exception as e:
                 logger.error(f"SSE error: {e}")
                 break

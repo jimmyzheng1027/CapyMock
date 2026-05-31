@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { api } from '@/api/index.js'
+import { PROFILE_TO_TYPE } from '@/data/interview.js'
 import AnalysisLayout from '@/layouts/AnalysisLayout.vue'
 import InterviewCard from '@/components/interview/InterviewCard.vue'
 import InterviewConfigModal from '@/components/interview/InterviewConfigModal.vue'
@@ -8,69 +10,37 @@ import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 
 const router = useRouter()
 const loading = ref(false)
-const interviews = ref([])
+const sessions = ref([])
 const filterType = ref('all')
 const filterStatus = ref('all')
 const sortBy = ref('date')
 const showConfigModal = ref(false)
 
-// Mock data for development
-const mockInterviews = [
-  {
-    id: 1,
-    type: 'comprehensive',
-    resume: '前端工程师_简历.pdf',
-    projects: ['job-seeker-assistant'],
-    duration: 15,
-    status: 'completed',
-    date: '2026-05-23',
-    summary: {
-      highlights: ['Vue组件化组织清晰', '对状态管理的理解准确'],
-      improvements: ['性能优化回答可更具体', '建议深入学习Vue3响应式原理']
-    }
-  },
-  {
-    id: 2,
-    type: 'technical',
-    resume: '前端工程师_简历.pdf',
-    projects: ['my-portfolio'],
-    duration: 22,
-    status: 'paused',
-    date: '2026-05-22',
-    progress: {
-      answered: 3,
-      totalQuestions: 8
-    }
-  },
-  {
-    id: 3,
-    type: 'behavioral',
-    resume: '我的简历_v2.pdf',
+// Map backend SessionMetadata to InterviewCard format
+const interviews = computed(() => {
+  return sessions.value.map(s => ({
+    id: s.id,
+    type: PROFILE_TO_TYPE[s.profile_id] || 'technical',
+    resume: '',
     projects: [],
-    duration: 10,
-    status: 'completed',
-    date: '2026-05-21',
-    summary: {
-      highlights: ['回答有条理', '团队协作经验丰富'],
-      improvements: ['可以更多举例说明', '表达可以更简洁']
-    }
-  }
-]
+    duration: Math.round((new Date(s.updated_at) - new Date(s.created_at)) / 60000) || 0,
+    status: s.status === 'active' ? 'paused' : s.status,
+    date: s.created_at,
+    summary: s.summary,
+  }))
+})
 
 const filteredInterviews = computed(() => {
   let result = [...interviews.value]
 
-  // Filter by type
   if (filterType.value !== 'all') {
     result = result.filter(i => i.type === filterType.value)
   }
 
-  // Filter by status
   if (filterStatus.value !== 'all') {
     result = result.filter(i => i.status === filterStatus.value)
   }
 
-  // Sort
   if (sortBy.value === 'date') {
     result.sort((a, b) => new Date(b.date) - new Date(a.date))
   } else if (sortBy.value === 'duration') {
@@ -80,13 +50,25 @@ const filteredInterviews = computed(() => {
   return result
 })
 
+async function loadSessions() {
+  loading.value = true
+  try {
+    const data = await api.getSessions()
+    sessions.value = data.sessions || []
+  } catch (e) {
+    console.error('Failed to load sessions:', e)
+    sessions.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(() => {
-  // TODO: Replace with actual API call
-  interviews.value = mockInterviews
+  loadSessions()
 })
 
 function handleViewSummary(id) {
-  router.push(`/interview/${id}`)
+  router.push(`/interview/${id}/summary`)
 }
 
 function handleContinueInterview(id) {

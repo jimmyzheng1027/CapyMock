@@ -1,22 +1,19 @@
 id: "interviewer-behavior"
 prompt_template: "data/prompt/interviewer_behavior.md"
 llm:
-  provider: "dashscope"
-  model: "qwen-max"
+  provider: "mimo"
+  model: "mimo-v2.5-pro"
   temperature: 0.7
   fallback:
-    provider: "deepseek"
-    model: "deepseek-chat"
+    provider: "mimo"
+    model: "mimo-v2.5"
     temperature: 0.7
 tools:
-  - read_resume
-  - take_note
-  - read_skill
-skills:
-  - "interview-behavior-followup"
+  - save_real_question
+skills: []
 context:
-  max_history_tokens: 8000
-  compact_threshold: 6000
+  max_history_tokens: 100000
+  compact_threshold: 80000
 policy:
   max_steps: 10
   parallel_tools: 3

@@ -5,16 +5,17 @@ import { useInterviewConfig } from '@/composables/useInterviewConfig.js'
 const {
   resumes,
   resumesLoading,
+  githubRepos,
+  reposLoading,
+  selectedGithubRepos,
   interviewTypes,
   selectedResume,
-  selectedProjects,
   selectedType,
   isConfigValid,
-  analyzedProjects,
-  toggleProject,
+  starting,
   handleStartInterview,
   handleGoToUpload,
-  handleGoToAnalysis
+  handleGoToAnalysis,
 } = useInterviewConfig()
 
 function formatDate(iso) {
@@ -38,7 +39,7 @@ function formatDate(iso) {
         </router-link>
         <h2 class="text-xl font-bold text-ink">面试配置</h2>
       </div>
-      <p class="text-sm text-ink-muted ml-12">选择简历和项目，开始你的模拟面试</p>
+      <p class="text-sm text-ink-muted ml-12">选择简历和面试类型，开始你的模拟面试</p>
     </div>
 
     <div class="space-y-6">
@@ -76,43 +77,6 @@ function formatDate(iso) {
       <div class="bg-white dark:bg-surface border border-border-light dark:border-border rounded-xl p-6">
         <div class="flex items-center gap-2 mb-4 font-semibold text-ink">
           <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">2</div>
-          <span>选择GitHub项目（可选，可多选）</span>
-        </div>
-
-        <div v-if="analyzedProjects.length > 0" class="space-y-3">
-          <label
-            v-for="project in analyzedProjects"
-            :key="project.id"
-            class="flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all"
-            :class="selectedProjects.includes(project.id) ? 'border-primary bg-primary/5' : 'border-border-light dark:border-border hover:border-primary/50'"
-          >
-            <input
-              type="checkbox"
-              :value="project.id"
-              :checked="selectedProjects.includes(project.id)"
-              @change="toggleProject(project.id)"
-              class="w-4 h-4 text-primary"
-            />
-            <div class="flex-1">
-              <div class="font-medium text-ink">{{ project.name }}</div>
-              <div class="text-xs text-ink-muted">{{ project.tech }} · 已分析</div>
-            </div>
-          </label>
-        </div>
-
-        <div v-else class="text-center py-6">
-          <p class="text-sm text-ink-muted mb-3">暂无已分析的GitHub项目</p>
-          <button class="text-sm text-primary hover:underline" @click="handleGoToAnalysis">去分析 →</button>
-        </div>
-
-        <p v-if="analyzedProjects.length > 0" class="text-xs text-ink-muted mt-3">
-          不选择项目时，面试将仅基于简历进行
-        </p>
-      </div>
-
-      <div class="bg-white dark:bg-surface border border-border-light dark:border-border rounded-xl p-6">
-        <div class="flex items-center gap-2 mb-4 font-semibold text-ink">
-          <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">3</div>
           <span>面试类型</span>
         </div>
 
@@ -132,14 +96,57 @@ function formatDate(iso) {
         </div>
       </div>
 
+      <div class="bg-white dark:bg-surface border border-border-light dark:border-border rounded-xl p-6">
+        <div class="flex items-center gap-2 mb-1 font-semibold text-ink">
+          <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">3</div>
+          <span>GitHub 仓库（可选）</span>
+        </div>
+        <p class="text-xs text-ink-muted ml-10 mb-4">选择已分析的仓库，让面试官了解你的项目经验</p>
+
+        <div v-if="reposLoading" class="text-center py-6">
+          <p class="text-sm text-ink-muted">加载中...</p>
+        </div>
+
+        <div v-else-if="githubRepos.length > 0" class="space-y-3">
+          <label
+            v-for="repo in githubRepos"
+            :key="repo.id"
+            class="flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all"
+            :class="selectedGithubRepos.includes(repo.id) ? 'border-primary bg-primary/5' : 'border-border-light dark:border-border hover:border-primary/50'"
+          >
+            <input
+              type="checkbox"
+              :value="repo.id"
+              v-model="selectedGithubRepos"
+              class="w-4 h-4 text-primary accent-primary"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-ink truncate">{{ repo.fullName }}</div>
+              <div class="text-xs text-ink-muted truncate">{{ repo.description || '暂无描述' }}</div>
+            </div>
+            <span
+              v-if="repo.techTags?.length"
+              class="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary flex-shrink-0"
+            >
+              {{ repo.techTags[0] }}
+            </span>
+          </label>
+        </div>
+
+        <div v-else class="text-center py-6">
+          <p class="text-sm text-ink-muted mb-3">暂无已分析的仓库</p>
+          <button class="text-sm text-primary hover:underline" @click="handleGoToAnalysis">去分析 →</button>
+        </div>
+      </div>
+
       <div class="flex justify-end pt-4">
         <button
           class="btn btn--primary px-8 py-3 text-base"
-          :disabled="!isConfigValid"
-          :class="{ 'opacity-50 cursor-not-allowed': !isConfigValid }"
+          :disabled="!isConfigValid || starting"
+          :class="{ 'opacity-50 cursor-not-allowed': !isConfigValid || starting }"
           @click="handleStartInterview"
         >
-          开始面试 →
+          {{ starting ? '创建中...' : '开始面试 →' }}
         </button>
       </div>
 

@@ -1,19 +1,18 @@
 id: "summary-generator"
 prompt_template: "data/prompt/summary_generator.md"
 llm:
-  provider: "dashscope"
-  model: "qwen-max"
+  provider: "mimo"
+  model: "mimo-v2.5-pro"
   temperature: 0.3
   fallback:
-    provider: "deepseek"
-    model: "deepseek-chat"
+    provider: "mimo"
+    model: "mimo-v2.5"
     temperature: 0.3
-tools:
-  - read_resume
+tools: []
 skills: []
 context:
-  max_history_tokens: 12000
-  compact_threshold: 10000
+  max_history_tokens: 100000
+  compact_threshold: 80000
 policy:
   max_steps: 5
   parallel_tools: 1

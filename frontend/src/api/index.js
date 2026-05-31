@@ -97,11 +97,48 @@ export const api = {
     })
   },
 
-  // Interview - get AI response (mock)
-  getInterviewReply(messages, type) {
-    return mockRequest('/interview/reply', {
+  // Interview sessions (real backend)
+  createSession({ profileId, mode = 'text', resumeId = null, githubRepoIds = [] }) {
+    return realRequest('/sessions', {
       method: 'POST',
-      body: JSON.stringify({ messages, type }),
+      body: JSON.stringify({
+        profile_id: profileId,
+        mode,
+        resume_id: resumeId,
+        github_repo_ids: githubRepoIds,
+      }),
+    })
+  },
+
+  getSessions({ userId = 'default', status = null, profileId = null } = {}) {
+    const params = new URLSearchParams({ user_id: userId })
+    if (status) params.set('status', status)
+    if (profileId) params.set('profile_id', profileId)
+    return realRequest(`/sessions?${params.toString()}`)
+  },
+
+  getSession(sessionId) {
+    return realRequest(`/sessions/${sessionId}`)
+  },
+
+  getSessionEvents(sessionId) {
+    return realRequest(`/sessions/${sessionId}/events`)
+  },
+
+  sendSSEMessage(sessionId, text) {
+    return realRequest(`/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    })
+  },
+
+  streamEvents(sessionId) {
+    return new EventSource(`/api/sessions/${sessionId}/stream`)
+  },
+
+  finalizeSession(sessionId) {
+    return realRequest(`/sessions/${sessionId}/finalize`, {
+      method: 'POST',
     })
   },
 }

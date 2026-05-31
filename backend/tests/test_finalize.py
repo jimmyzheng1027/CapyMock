@@ -75,7 +75,6 @@ class TestFinalizeMemory:
             },
             "capy_note": "# 强弱项\n## 强项\n- Python 熟练\n## 弱项\n- 系统设计需要加强",
             "user_md": "# 用户信息\n偏好中文面试",
-            "real_ques": "# 真实面试题\n字节：限流设计",
         }
 
         memory_store = MemoryStore(root_dir=str(memory_root))
@@ -99,7 +98,6 @@ class TestFinalizeMemory:
 
         # Verify memory files written
         assert memory_store.read_capy_note("user-1", "res-1") != ""
-        assert memory_store.read_real_ques("user-1", "res-1") != ""
 
     async def test_finalize_no_memory_when_no_notes(
         self, db: AsyncSession, memory_root: Path
@@ -128,7 +126,6 @@ class TestFinalizeMemory:
             "summary": {"grade": "A", "evaluation": "完美"},
             "capy_note": "",
             "user_md": "",
-            "real_ques": "",
         }
 
         await service.finalize_session(

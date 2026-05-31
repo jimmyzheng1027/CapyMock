@@ -48,6 +48,8 @@ class ToolContext:
     db_session: Any = None  # SQLAlchemy AsyncSession
     repo_root: str = "storage/repo"  # root directory for cloned repos
     repo_url: str = ""  # current repo URL (for analysis context)
+    resume_id: str = ""  # resume ID for memory file operations
+    memory_root: str = "storage/memory"  # root directory for memory files
 
 
 @dataclass

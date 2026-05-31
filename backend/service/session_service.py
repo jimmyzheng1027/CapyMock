@@ -43,6 +43,7 @@ class SessionService:
             updated_at=now,
             event_count=1,
             resume_id=request.resume_id,
+            github_repo_ids=json.dumps(request.github_repo_ids) if request.github_repo_ids else None,
         )
         self.db.add(session)
         await self.db.commit()

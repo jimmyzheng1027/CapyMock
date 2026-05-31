@@ -62,6 +62,9 @@ class ReActAgent:
         user_id: str,
         session_id: str,
         cancel_token: CancelToken | None = None,
+        resume_content: str = "",
+        github_repos: list[str] | None = None,
+        resume_id: str = "",
     ) -> None:
         self.profile = profile
         self.llm = llm
@@ -74,6 +77,9 @@ class ReActAgent:
         self.session_id = session_id
         self.cancel_token = cancel_token or CancelToken()
         self.state = AgentState.IDLE
+        self._resume_content = resume_content
+        self._github_repos = github_repos or []
+        self._resume_id = resume_id
         self._text_buffer: list[str] = []
         self._current_tool_calls: list[ToolCall] = []
         self._session_obj: object | None = None
@@ -105,7 +111,11 @@ class ReActAgent:
 
             # Build messages
             messages = self.context_builder.build_messages(
-                self.profile, events, user_input
+                self.profile, events, user_input,
+                resume_content=self._resume_content,
+                user_id=self.user_id,
+                resume_id=self._resume_id,
+                github_repos=self._github_repos,
             )
 
             # Check if compaction is needed
@@ -468,6 +478,8 @@ class ReActAgent:
                 db_session=self._db_session,
                 repo_root=self._repo_root,
                 repo_url=self._repo_url,
+                resume_id=self._resume_id,
+                memory_root="storage/memory",
             )
 
         return ctx_factory

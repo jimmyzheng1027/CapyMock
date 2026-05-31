@@ -2,14 +2,18 @@
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { api } from '@/api/index.js'
 import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
+import { renderMarkdown } from '@/utils/renderMarkdown.js'
+import { eventsToMessages } from '@/utils/interviewHelpers.js'
 
 const props = defineProps({
+  sessionId: { type: String, required: true },
   interviewType: { type: String, default: 'technical' },
   autoStart: { type: Boolean, default: false },
+  hasHistory: { type: Boolean, default: false },
   paused: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:type', 'update:messages', 'interview-started', 'interview-ended'])
+const emit = defineEmits(['update:messages', 'interview-started', 'interview-ended'])
 
 const messages = ref([])
 const started = ref(false)
@@ -17,37 +21,134 @@ const inputText = ref('')
 const chatContainer = ref(null)
 const textareaRef = ref(null)
 const aiTyping = ref(false)
+const historyLoading = ref(false)
+let currentEventSource = null
 
-const welcomeOptions = [
-  { type: 'technical', label: '技术面试', desc: '算法、系统设计、技术深度', icon: 'code' },
-  { type: 'behavioral', label: '行为面试', desc: 'STAR 法则、团队协作、领导力', icon: 'people' },
-  { type: 'hr', label: 'HR 面试', desc: '职业规划、薪资谈判、自我介绍', icon: 'briefcase' },
-]
+function hasAssistantMessages() {
+  return messages.value.some((msg) => msg.role === 'ai')
+}
 
-function startInterview(type) {
-  emit('update:type', type)
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const data = await api.getSessionEvents(props.sessionId)
+    const loaded = eventsToMessages(data.events || []).map((msg) => ({
+      ...msg,
+      html: msg.role === 'ai' ? renderMarkdown(msg.content) : null,
+    }))
+    messages.value = loaded
+    if (loaded.length > 0) {
+      started.value = true
+    }
+  } catch (e) {
+    console.error('Failed to load session history:', e)
+  } finally {
+    historyLoading.value = false
+    if (messages.value.length > 0) {
+      await nextTick()
+      scrollToTop()
+    }
+  }
+}
+
+async function initializeSession() {
+  closeSSE()
+  aiTyping.value = false
+  messages.value = []
+  started.value = false
+
+  await loadHistory()
+
+  if (hasAssistantMessages() || props.hasHistory) {
+    started.value = true
+    return
+  }
+
+  if (props.autoStart) {
+    startInterview()
+  }
+}
+
+function startInterview() {
   started.value = true
   messages.value = []
-  addAIMessage(getFirstQuestion(type))
   emit('interview-started')
+  // Send initial empty message to trigger agent's opening question
+  triggerAgent('')
 }
 
-function getFirstQuestion(type) {
-  const questions = {
-    technical: '你好！我看到你简历上有 React 项目经验，能介绍一下你在项目中遇到的最大技术挑战吗？',
-    behavioral: '你好！请先做一个简短的自我介绍吧。',
-    hr: '你好！请先简单介绍一下自己吧。',
-  }
-  return questions[type] || questions.technical
-}
-
-async function addAIMessage(content) {
+async function triggerAgent(text) {
   aiTyping.value = true
-  await new Promise((r) => setTimeout(r, 800))
-  messages.value.push({ role: 'ai', content })
-  aiTyping.value = false
-  scrollToBottom()
-  emit('update:messages', messages.value)
+
+  try {
+    // POST /messages to trigger agent
+    await api.sendSSEMessage(props.sessionId, text)
+
+    // Add placeholder AI message for streaming
+    const aiMessage = { role: 'ai', content: '', html: '' }
+    messages.value.push(aiMessage)
+
+    // Connect to SSE stream
+    const eventSource = api.streamEvents(props.sessionId)
+    currentEventSource = eventSource
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+
+        if (data.type === 'assistant.text.delta') {
+          // Append delta to current AI message
+          const delta = data.payload?.text || ''
+          aiMessage.content += delta
+          aiMessage.html = renderMarkdown(aiMessage.content)
+          scrollToBottom()
+        } else if (data.type === 'assistant.text.done') {
+          const finalText = data.payload?.text
+          if (finalText) {
+            aiMessage.content = finalText
+            aiMessage.html = renderMarkdown(finalText)
+          }
+          scrollToBottom()
+        } else if (data.type === 'turn.done') {
+          closeSSE()
+          aiTyping.value = false
+          emit('update:messages', messages.value)
+        } else if (data.type === 'error') {
+          console.error('Agent error:', data.payload)
+          if (!aiMessage.content) {
+            aiMessage.content = '抱歉，遇到了一些问题，请重试。'
+          }
+          closeSSE()
+          aiTyping.value = false
+          emit('update:messages', messages.value)
+        }
+      } catch (e) {
+        // Keepalive or non-JSON, ignore
+      }
+    }
+
+    eventSource.onerror = () => {
+      closeSSE()
+      aiTyping.value = false
+      if (!aiMessage.content) {
+        aiMessage.content = '连接中断，请重试。'
+      }
+      emit('update:messages', messages.value)
+    }
+  } catch (e) {
+    console.error('Failed to trigger agent:', e)
+    aiTyping.value = false
+    messages.value.push({ role: 'ai', content: '发送失败，请重试。' })
+    scrollToBottom()
+    emit('update:messages', messages.value)
+  }
+}
+
+function closeSSE() {
+  if (currentEventSource) {
+    currentEventSource.close()
+    currentEventSource = null
+  }
 }
 
 function addUserMessage(content) {
@@ -62,9 +163,7 @@ async function sendMessage() {
   inputText.value = ''
   if (textareaRef.value) textareaRef.value.style.height = 'auto'
   addUserMessage(text)
-
-  const res = await api.getInterviewReply(messages.value, props.interviewType)
-  addAIMessage(res.content)
+  triggerAgent(text)
 }
 
 function scrollToBottom() {
@@ -101,10 +200,9 @@ function clearMessages() {
 
 defineExpose({ getMessages, clearMessages })
 
-onMounted(() => {
-  if (props.autoStart) {
-    startInterview(props.interviewType)
-  }
+onMounted(async () => {
+  if (!props.autoStart) return
+  await initializeSession()
 })
 </script>
 
@@ -161,7 +259,11 @@ onMounted(() => {
   </div>
 
   <div v-else class="interview-page">
-    <div ref="chatContainer" class="chat-area">
+    <div v-if="historyLoading" class="flex items-center justify-center flex-1">
+      <p class="text-ink-muted text-sm">加载聊天记录...</p>
+    </div>
+
+    <div v-else ref="chatContainer" class="chat-area">
       <div class="chat-messages">
         <div
           v-for="(msg, i) in messages"
@@ -173,7 +275,12 @@ onMounted(() => {
             <CapybaraLogo :size="16" :stroke-width="2" />
             Capy
           </div>
-          {{ msg.content }}
+          <template v-if="msg.role === 'ai'">
+            <div v-html="msg.html || renderMarkdown(msg.content)"></div>
+          </template>
+          <template v-else>
+            {{ msg.content }}
+          </template>
         </div>
 
         <div v-if="aiTyping" class="typing-indicator">
@@ -496,6 +603,43 @@ onMounted(() => {
 
 :global(.dark) .chat-input-wrap {
   background: var(--color-surface);
+}
+
+/* Markdown rendered content inside AI bubbles */
+:deep(.bubble-code) {
+  background: var(--color-surface);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.875em;
+  font-family: var(--font-mono, monospace);
+}
+
+:deep(.bubble-list) {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+}
+
+:deep(.bubble-list li) {
+  margin-bottom: var(--space-1);
+  line-height: var(--leading-relaxed);
+}
+
+:deep(.bubble-hr) {
+  border: none;
+  border-top: 1px solid var(--color-border-light);
+  margin: var(--space-3) 0;
+}
+
+:deep(.chat-bubble--ai p) {
+  margin: 0 0 var(--space-2);
+}
+
+:deep(.chat-bubble--ai p:last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.chat-bubble--ai strong) {
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {

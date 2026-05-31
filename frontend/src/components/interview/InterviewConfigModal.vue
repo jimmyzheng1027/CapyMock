@@ -9,20 +9,25 @@ const emit = defineEmits(['close'])
 
 const {
   resumes,
+  githubRepos,
+  selectedGithubRepos,
   interviewTypes,
   selectedResume,
-  selectedProjects,
   selectedType,
   isConfigValid,
-  analyzedProjects,
-  toggleProject,
+  starting,
   handleStartInterview: startInterview,
   handleGoToUpload,
-  handleGoToAnalysis
+  handleGoToAnalysis,
 } = useInterviewConfig()
 
-function handleStartInterview() {
-  startInterview()
+function formatDate(dateStr) {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleDateString('zh-CN')
+}
+
+async function handleStartInterview() {
+  await startInterview()
   emit('close')
 }
 
@@ -45,7 +50,7 @@ function handleClose() {
           </div>
           <div>
             <h2 class="modal__title">面试配置</h2>
-            <p class="modal__subtitle">选择简历和项目，开始你的模拟面试</p>
+            <p class="modal__subtitle">选择简历和面试类型，开始你的模拟面试</p>
           </div>
         </div>
         <button class="modal__close" @click="handleClose">
@@ -76,8 +81,8 @@ function handleClose() {
                 class="config-option__radio"
               />
               <div class="config-option__content">
-                <div class="config-option__name">{{ resume.name }}</div>
-                <div class="config-option__desc">上传于 {{ resume.date }}</div>
+                <div class="config-option__name">{{ resume.file_name }}</div>
+                <div class="config-option__desc">{{ resume.file_type?.toUpperCase() }} · 上传于 {{ formatDate(resume.created_at) }}</div>
               </div>
             </label>
           </div>
@@ -91,43 +96,6 @@ function handleClose() {
         <div class="config-step">
           <div class="config-step__header">
             <div class="config-step__number">2</div>
-            <span class="config-step__title">选择GitHub项目（可选，可多选）</span>
-          </div>
-
-          <div v-if="analyzedProjects.length > 0" class="config-step__options">
-            <label
-              v-for="project in analyzedProjects"
-              :key="project.id"
-              class="config-option"
-              :class="{ 'config-option--selected': selectedProjects.includes(project.id) }"
-            >
-              <input
-                type="checkbox"
-                :value="project.id"
-                :checked="selectedProjects.includes(project.id)"
-                @change="toggleProject(project.id)"
-                class="config-option__checkbox"
-              />
-              <div class="config-option__content">
-                <div class="config-option__name">{{ project.name }}</div>
-                <div class="config-option__desc">{{ project.tech }} · 已分析</div>
-              </div>
-            </label>
-          </div>
-
-          <div v-else class="config-step__empty">
-            <p class="text-sm text-ink-muted mb-2">暂无已分析的GitHub项目</p>
-            <button class="text-sm text-primary hover:underline" @click="handleGoToAnalysis">去分析 →</button>
-          </div>
-
-          <p v-if="analyzedProjects.length > 0" class="config-step__hint">
-            不选择项目时，面试将仅基于简历进行
-          </p>
-        </div>
-
-        <div class="config-step">
-          <div class="config-step__header">
-            <div class="config-step__number">3</div>
             <span class="config-step__title">面试类型</span>
           </div>
 
@@ -149,6 +117,39 @@ function handleClose() {
                 <div class="config-option__desc">{{ type.description }}</div>
               </div>
             </label>
+          </div>
+        </div>
+
+        <div class="config-step">
+          <div class="config-step__header">
+            <div class="config-step__number">3</div>
+            <span class="config-step__title">GitHub 仓库（可选）</span>
+          </div>
+          <p class="config-step__hint">选择已分析的仓库，让面试官了解你的项目经验</p>
+
+          <div v-if="githubRepos.length > 0" class="config-step__options">
+            <label
+              v-for="repo in githubRepos"
+              :key="repo.id"
+              class="config-option"
+              :class="{ 'config-option--selected': selectedGithubRepos.includes(repo.id) }"
+            >
+              <input
+                type="checkbox"
+                :value="repo.id"
+                v-model="selectedGithubRepos"
+                class="config-option__checkbox"
+              />
+              <div class="config-option__content">
+                <div class="config-option__name">{{ repo.fullName }}</div>
+                <div class="config-option__desc">{{ repo.description || '暂无描述' }}</div>
+              </div>
+            </label>
+          </div>
+
+          <div v-else class="config-step__empty">
+            <p class="text-sm text-ink-muted mb-2">暂无已分析的仓库</p>
+            <button class="text-sm text-primary hover:underline" @click="handleGoToAnalysis">去分析 →</button>
           </div>
         </div>
       </div>

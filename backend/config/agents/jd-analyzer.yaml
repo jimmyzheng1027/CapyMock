@@ -11,8 +11,8 @@ llm:
 tools: []
 skills: []
 context:
-  max_history_tokens: 0
-  compact_threshold: 0
+  max_history_tokens: 100000
+  compact_threshold: 80000
 policy:
   max_steps: 1
   parallel_tools: 0

@@ -42,6 +42,9 @@ class AgentFactory:
         mode: str = "text",
         user_id: str = "default",
         db_session: object | None = None,
+        resume_content: str = "",
+        github_repos: list[str] | None = None,
+        resume_id: str = "",
     ) -> ReActAgent:
         """Create a ReActAgent instance.
 
@@ -50,6 +53,7 @@ class AgentFactory:
             session_id: ID of the session
             mode: Mode of the agent ("text" or "voice")
             user_id: ID of the user
+            resume_id: ID of the resume (for memory file operations)
 
         Returns:
             Configured ReActAgent instance
@@ -81,6 +85,9 @@ class AgentFactory:
             session_store=self.session_store,
             user_id=user_id,
             session_id=session_id,
+            resume_content=resume_content,
+            github_repos=github_repos or [],
+            resume_id=resume_id,
         )
         agent._db_session = db_session
         return agent

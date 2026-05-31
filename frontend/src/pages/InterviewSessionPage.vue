@@ -1,11 +1,11 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { api } from '@/api/index.js'
 import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
 import TextMode from '@/components/interview/TextMode.vue'
 import VoiceMode from '@/components/interview/VoiceMode.vue'
-import InterviewSummary from '@/components/interview/InterviewSummary.vue'
-import { INTERVIEW_TYPES } from '@/data/interview.js'
+import { INTERVIEW_TYPES, PROFILE_TO_TYPE } from '@/data/interview.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,10 +20,10 @@ const textModeRef = ref(null)
 const voiceModeRef = ref(null)
 
 const interviewType = ref(route.query.type || 'technical')
-const resumeName = ref(route.query.resume || '我的简历.pdf')
-const projectNames = ref(route.query.projects ? route.query.projects.split(',') : [])
+const sessionLoading = ref(true)
+const sessionError = ref(null)
 
-const summary = ref(null)
+const summaryLoading = ref(false)
 
 const formattedTime = ref('00:00')
 let timer = null
@@ -86,63 +86,48 @@ function handleExitConfirm() {
   }
 }
 
-function handleGenerateSummary() {
-  let messages = []
-  if (mode.value === 'text' && textModeRef.value) {
-    messages = textModeRef.value.getMessages()
-  } else if (mode.value === 'voice' && voiceModeRef.value) {
-    const transcript = voiceModeRef.value.getTranscript()
-    messages = transcript.map((e, i) => ({
-      id: i,
-      role: e.label === 'Capy' ? 'ai' : 'user',
-      content: e.text,
-      isFollowUp: false
-    }))
-  }
-
-  summary.value = {
-    overview: {
-      type: interviewType.value,
-      duration: elapsed || 15,
-      questionCount: messages.filter(m => m.role === 'user').length || 5,
-      resume: resumeName.value,
-      projects: projectNames.value
-    },
-    highlights: [
-      'Vue组件化组织清晰，提到了合理的目录结构',
-      '对状态管理的理解准确，能结合项目说明',
-      '回答有条理，逻辑清晰'
-    ],
-    improvements: [
-      '关于性能优化的回答可以更具体，举实际例子',
-      '建议深入学习Vue3的响应式原理',
-      '可以多练习系统设计类问题的表达'
-    ],
-    messages
-  }
-  interviewStatus.value = 'completed'
+async function handleGenerateSummary() {
+  summaryLoading.value = true
   showExitDialog.value = false
   stopTimer()
-}
 
-function handleDownloadSummary() {
-  alert('下载功能待实现')
-}
-
-function handleNewInterview() {
-  router.push('/interview')
-}
-
-function handleBackToList() {
-  router.push('/interview')
+  try {
+    await api.finalizeSession(interviewId)
+    router.push(`/interview/${interviewId}/summary`)
+  } catch (e) {
+    console.error('Failed to generate summary:', e)
+    alert('生成总结失败，请重试')
+    startTimer()
+  } finally {
+    summaryLoading.value = false
+  }
 }
 
 function switchMode(newMode) {
   mode.value = newMode
 }
 
-onMounted(() => {
-  startTimer()
+onMounted(async () => {
+  // Validate session exists
+  try {
+    const session = await api.getSession(interviewId)
+    if (session.status === 'completed' && session.summary) {
+      router.replace(`/interview/${interviewId}/summary`)
+      return
+    }
+    // Map profile_id back to interview type
+    if (PROFILE_TO_TYPE[session.profile_id]) {
+      interviewType.value = PROFILE_TO_TYPE[session.profile_id]
+    }
+  } catch (e) {
+    sessionError.value = '面试会话不存在或已过期'
+    console.error('Session not found:', e)
+  } finally {
+    sessionLoading.value = false
+    if (!summary.value) {
+      startTimer()
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -199,19 +184,24 @@ onUnmounted(() => {
     </header>
 
     <main class="interview-content">
-      <div v-if="interviewStatus === 'completed' && summary" class="interview-summary-container">
-        <InterviewSummary
-          :summary="summary"
-          @download="handleDownloadSummary"
-          @new-interview="handleNewInterview"
-          @back-to-list="handleBackToList"
-        />
+      <div v-if="sessionLoading" class="flex items-center justify-center flex-1">
+        <p class="text-ink-muted">加载中...</p>
+      </div>
+
+      <div v-else-if="sessionError" class="flex flex-col items-center justify-center flex-1 gap-4">
+        <p class="text-ink-muted">{{ sessionError }}</p>
+        <button class="btn btn--primary" @click="router.push('/interview')">返回列表</button>
+      </div>
+
+      <div v-else-if="summaryLoading" class="flex items-center justify-center flex-1">
+        <p class="text-ink-muted">正在生成面试总结...</p>
       </div>
 
       <div v-else class="interview-mode-container">
         <TextMode
           v-if="mode === 'text'"
           ref="textModeRef"
+          :session-id="interviewId"
           :interview-type="interviewType"
           :auto-start="true"
           :paused="interviewStatus === 'paused'"
@@ -385,13 +375,6 @@ onUnmounted(() => {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-}
-
-.interview-summary-container {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--space-6);
 }
 
 .interview-mode-container {

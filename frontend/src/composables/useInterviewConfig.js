@@ -1,18 +1,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/index.js'
+import { TYPE_TO_PROFILE } from '@/data/interview.js'
 
 export function useInterviewConfig() {
   const router = useRouter()
 
   const resumes = ref([])
   const resumesLoading = ref(false)
-
-  const projects = ref([
-    { id: 1, name: 'job-seeker-assistant', tech: 'Vue', analyzed: true },
-    { id: 2, name: 'my-portfolio', tech: 'HTML', analyzed: true },
-    { id: 3, name: 'data-pipeline', tech: 'Python', analyzed: false }
-  ])
+  const githubRepos = ref([])
+  const reposLoading = ref(false)
+  const starting = ref(false)
 
   const interviewTypes = [
     { id: 'technical', label: '技术面试', description: '深入技术细节和项目实现' },
@@ -21,16 +19,26 @@ export function useInterviewConfig() {
   ]
 
   const selectedResume = ref(null)
-  const selectedProjects = ref([])
   const selectedType = ref('comprehensive')
+  const selectedGithubRepos = ref([])
 
   const isConfigValid = computed(() => {
     return selectedResume.value !== null && selectedType.value !== null
   })
 
-  const analyzedProjects = computed(() => {
-    return projects.value.filter(p => p.analyzed)
-  })
+  // Load GitHub repos from API
+  async function loadGithubRepos() {
+    reposLoading.value = true
+    try {
+      const data = await api.getGithubRepos()
+      githubRepos.value = data
+    } catch (e) {
+      console.error('Failed to load GitHub repos:', e)
+      githubRepos.value = []
+    } finally {
+      reposLoading.value = false
+    }
+  }
 
   // Load resumes from API
   async function loadResumes() {
@@ -49,22 +57,28 @@ export function useInterviewConfig() {
   // Load on mount
   onMounted(() => {
     loadResumes()
+    loadGithubRepos()
   })
 
-  function toggleProject(projectId) {
-    const index = selectedProjects.value.indexOf(projectId)
-    if (index === -1) {
-      selectedProjects.value.push(projectId)
-    } else {
-      selectedProjects.value.splice(index, 1)
+  async function handleStartInterview() {
+    if (!isConfigValid.value || starting.value) return
+    starting.value = true
+
+    try {
+      const profileId = TYPE_TO_PROFILE[selectedType.value]
+      const result = await api.createSession({
+        profileId,
+        mode: 'text',
+        resumeId: selectedResume.value,
+        githubRepoIds: selectedGithubRepos.value,
+      })
+      router.push(`/interview/${result.session_id}?type=${selectedType.value}`)
+    } catch (e) {
+      console.error('Failed to create session:', e)
+      alert('创建面试会话失败，请重试')
+    } finally {
+      starting.value = false
     }
-  }
-
-  function handleStartInterview() {
-    if (!isConfigValid.value) return
-
-    const interviewId = Date.now()
-    router.push(`/interview/${interviewId}?type=${selectedType.value}&resume=${encodeURIComponent(selectedResume.value)}&projects=${selectedProjects.value.join(',')}`)
   }
 
   function handleGoToUpload() {
@@ -78,17 +92,18 @@ export function useInterviewConfig() {
   return {
     resumes,
     resumesLoading,
-    projects,
+    githubRepos,
+    reposLoading,
+    selectedGithubRepos,
     interviewTypes,
     selectedResume,
-    selectedProjects,
     selectedType,
     isConfigValid,
-    analyzedProjects,
-    toggleProject,
+    starting,
     handleStartInterview,
     handleGoToUpload,
     handleGoToAnalysis,
     loadResumes,
+    loadGithubRepos,
   }
 }
