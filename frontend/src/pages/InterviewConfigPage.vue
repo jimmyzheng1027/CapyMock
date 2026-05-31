@@ -4,6 +4,7 @@ import { useInterviewConfig } from '@/composables/useInterviewConfig.js'
 
 const {
   resumes,
+  resumesLoading,
   interviewTypes,
   selectedResume,
   selectedProjects,
@@ -15,6 +16,11 @@ const {
   handleGoToUpload,
   handleGoToAnalysis
 } = useInterviewConfig()
+
+function formatDate(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
 </script>
 
 <template>
@@ -42,7 +48,11 @@ const {
           <span>选择简历（必选）</span>
         </div>
 
-        <div v-if="resumes.length > 0" class="space-y-3">
+        <div v-if="resumesLoading" class="text-center py-6">
+          <p class="text-sm text-ink-muted">加载中...</p>
+        </div>
+
+        <div v-else-if="resumes.length > 0" class="space-y-3">
           <label
             v-for="resume in resumes"
             :key="resume.id"
@@ -51,8 +61,8 @@ const {
           >
             <input type="radio" :value="resume.id" v-model="selectedResume" class="w-4 h-4 text-primary" />
             <div class="flex-1">
-              <div class="font-medium text-ink">{{ resume.name }}</div>
-              <div class="text-xs text-ink-muted">上传于 {{ resume.date }}</div>
+              <div class="font-medium text-ink">{{ resume.file_name }}</div>
+              <div class="text-xs text-ink-muted">{{ resume.file_type?.toUpperCase() }} · 上传于 {{ formatDate(resume.created_at) }}</div>
             </div>
           </label>
         </div>

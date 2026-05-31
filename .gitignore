@@ -39,6 +39,7 @@ backend/storage/db/*.db
 
 # Backend runtime storage (keep source .py and .gitkeep)
 backend/storage/repo/*
+backend/storage/resumes/*
 !backend/storage/repo/.gitkeep
 backend/storage/memory/*
 !backend/storage/memory/*.py

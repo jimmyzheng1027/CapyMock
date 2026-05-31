@@ -10,6 +10,8 @@ from trace import init_tracing, is_tracing_enabled, shutdown_tracing
 from agent.profile_loader import ProfileLoader
 from api.chat import router as sse_router
 from api.github_analysis import router as analysis_router
+from api.jd_analysis import router as jd_router
+from api.resume_analysis import router as resume_router
 from api.sessions import router as api_router
 from api.tasks import router as tasks_router
 from api.ws import router as ws_router
@@ -79,6 +81,8 @@ app.include_router(api_router, prefix="/api")
 app.include_router(sse_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
+app.include_router(jd_router, prefix="/api")
+app.include_router(resume_router, prefix="/api")
 app.include_router(ws_router)
 
 

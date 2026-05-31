@@ -17,7 +17,11 @@ async function realRequest(path, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const detail = body?.detail || `API error: ${res.status}`
+    throw new Error(detail)
+  }
   return res.json()
 }
 
@@ -51,19 +55,45 @@ export const api = {
     return `/api/tasks/${taskId}/stream`
   },
 
-  // JD analysis (mock)
+  // JD analysis (real backend)
   analyzeJd(text) {
-    return mockRequest('/analysis/jd', {
+    return realRequest('/jd/analyze', {
       method: 'POST',
       body: JSON.stringify({ text }),
     })
   },
 
-  // Resume analysis (mock)
-  analyzeResume(file, position) {
-    return mockRequest('/analysis/resume', {
+  // Resume CRUD (real backend)
+  getResumes(userId = 'default') {
+    return realRequest(`/resumes?user_id=${encodeURIComponent(userId)}`)
+  },
+
+  getResume(resumeId) {
+    return realRequest(`/resumes/${resumeId}`)
+  },
+
+  async uploadResume(file, userId = 'default') {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('user_id', userId)
+    const res = await fetch('/api/resumes/upload', {
       method: 'POST',
-      body: JSON.stringify({ fileName: file.name, fileSize: file.size, position }),
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `Upload failed: ${res.status}` }))
+      throw new Error(err.detail || `Upload failed: ${res.status}`)
+    }
+    return res.json()
+  },
+
+  deleteResume(resumeId) {
+    return realRequest(`/resumes/${resumeId}`, { method: 'DELETE' })
+  },
+
+  analyzeResume(resumeId, force = false) {
+    return realRequest(`/resumes/${resumeId}/analyze?force=${force}`, {
+      method: 'POST',
     })
   },
 

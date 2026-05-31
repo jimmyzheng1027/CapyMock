@@ -1,0 +1,19 @@
+id: "resume-analyzer"
+prompt_template: "data/prompt/resume_analyzer.md"
+llm:
+  provider: "mimo"
+  model: "mimo-v2.5"
+  temperature: 1.0
+  fallback:
+    provider: "mimo"
+    model: "mimo-v2.5"
+    temperature: 1.0
+tools: []
+skills: []
+context:
+  max_history_tokens: 0
+  compact_threshold: 0
+policy:
+  max_steps: 1
+  parallel_tools: 0
+  tool_timeout: 0

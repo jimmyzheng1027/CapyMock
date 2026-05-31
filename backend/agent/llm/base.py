@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from agent.llm.events import LLMEvent, TextDelta, ToolCallEnd, Usage
+from agent.llm.events import LLMEvent, ProviderError, TextDelta, ToolCallEnd, Usage
 
 
 @dataclass
@@ -14,6 +14,7 @@ class CompletionResult:
     text: str
     tool_calls: list[dict]
     usage: Usage | None = None
+    error: str | None = None
 
 
 class BaseLLM(ABC):
@@ -37,6 +38,7 @@ class BaseLLM(ABC):
         text_parts: list[str] = []
         tool_calls: list[dict] = []
         usage: Usage | None = None
+        error: str | None = None
 
         async for event in self.stream(messages, tools):
             if isinstance(event, TextDelta):
@@ -49,11 +51,14 @@ class BaseLLM(ABC):
                 })
             elif isinstance(event, Usage):
                 usage = event
+            elif isinstance(event, ProviderError):
+                error = event.message
 
         return CompletionResult(
             text="".join(text_parts),
             tool_calls=tool_calls,
             usage=usage,
+            error=error,
         )
 
     @abstractmethod

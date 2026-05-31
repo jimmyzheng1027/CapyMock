@@ -24,6 +24,8 @@ const iconPaths = {
         <path v-else-if="icon === 'check'" d="M6 9l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         <path v-else-if="icon === 'plus'" d="M9 4v10M4 9h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         <path v-else-if="icon === 'star'" d="M9 2l2.1 4.3 4.7.7-3.4 3.3.8 4.7L9 12.8l-4.2 2.2.8-4.7L2.2 7l4.7-.7z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path v-else-if="icon === 'warning'" d="M9 3L2 15h14L9 3z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path v-else-if="icon === 'warning'" d="M9 7v3M9 12v0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
       {{ title }}
     </div>

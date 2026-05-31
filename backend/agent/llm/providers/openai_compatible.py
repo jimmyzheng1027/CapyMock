@@ -31,6 +31,40 @@ class _StreamToolCall:
     started: bool = False
 
 
+def build_multimodal_message(
+    text: str,
+    file_b64: str | None = None,
+    mime_type: str | None = None,
+    images: list[tuple[str, str]] | None = None,
+    text_only: bool = False,
+) -> dict:
+    """Build a user message, optionally with base64-encoded image attachments.
+
+    For plain text: returns {"role": "user", "content": "text"}.
+    For multimodal: returns {"role": "user", "content": [text_part, image_url_part, ...]}.
+    """
+    if text_only:
+        return {"role": "user", "content": text}
+
+    attachments: list[tuple[str, str]] = []
+    if images:
+        attachments = images
+    elif file_b64 and mime_type:
+        attachments = [(file_b64, mime_type)]
+
+    if not attachments:
+        return {"role": "user", "content": text}
+
+    content: list[dict] = [{"type": "text", "text": text}]
+    for b64, attachment_mime in attachments:
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:{attachment_mime};base64,{b64}"},
+        })
+
+    return {"role": "user", "content": content}
+
+
 class OpenAICompatibleLLM(BaseLLM):
     """Base class for OpenAI-compatible LLM providers (Template Method pattern)."""
 

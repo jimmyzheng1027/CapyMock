@@ -52,6 +52,11 @@ class Resume(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False, index=True)
-    content = Column(Text, nullable=False)
+    file_name = Column(String, nullable=True)  # Original file name
+    file_path = Column(String, nullable=True)  # File storage path
+    file_type = Column(String, nullable=True)  # pdf, png, jpg
+    content = Column(Text, nullable=False, default="")
     parsed_json = Column(Text, nullable=True)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    analysis_result = Column(Text, nullable=True)  # Cached analysis JSON
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

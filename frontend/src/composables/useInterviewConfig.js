@@ -1,13 +1,12 @@
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { api } from '@/api/index.js'
 
 export function useInterviewConfig() {
   const router = useRouter()
 
-  const resumes = ref([
-    { id: 1, name: '前端工程师_简历.pdf', date: '2026-05-20' },
-    { id: 2, name: '我的简历_v2.pdf', date: '2026-05-18' }
-  ])
+  const resumes = ref([])
+  const resumesLoading = ref(false)
 
   const projects = ref([
     { id: 1, name: 'job-seeker-assistant', tech: 'Vue', analyzed: true },
@@ -31,6 +30,25 @@ export function useInterviewConfig() {
 
   const analyzedProjects = computed(() => {
     return projects.value.filter(p => p.analyzed)
+  })
+
+  // Load resumes from API
+  async function loadResumes() {
+    resumesLoading.value = true
+    try {
+      const data = await api.getResumes()
+      resumes.value = data
+    } catch (e) {
+      console.error('Failed to load resumes:', e)
+      resumes.value = []
+    } finally {
+      resumesLoading.value = false
+    }
+  }
+
+  // Load on mount
+  onMounted(() => {
+    loadResumes()
   })
 
   function toggleProject(projectId) {
@@ -59,6 +77,7 @@ export function useInterviewConfig() {
 
   return {
     resumes,
+    resumesLoading,
     projects,
     interviewTypes,
     selectedResume,
@@ -69,6 +88,7 @@ export function useInterviewConfig() {
     toggleProject,
     handleStartInterview,
     handleGoToUpload,
-    handleGoToAnalysis
+    handleGoToAnalysis,
+    loadResumes,
   }
 }
