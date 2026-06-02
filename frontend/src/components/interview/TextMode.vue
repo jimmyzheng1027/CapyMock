@@ -77,18 +77,34 @@ function startInterview() {
   triggerAgent('')
 }
 
+function patchStreamingAiMessage(aiIndex, patch) {
+  const msg = messages.value[aiIndex]
+  if (!msg || msg.role !== 'ai') return
+  messages.value[aiIndex] = { ...msg, ...patch }
+}
+
+function appendAiStreamDelta(aiIndex, delta) {
+  if (!delta) return
+  const msg = messages.value[aiIndex]
+  if (!msg || msg.role !== 'ai') return
+  const content = msg.content + delta
+  patchStreamingAiMessage(aiIndex, {
+    content,
+    html: renderMarkdown(content),
+  })
+  if (aiTyping.value) aiTyping.value = false
+  scrollToBottom()
+}
+
 async function triggerAgent(text) {
   aiTyping.value = true
 
   try {
-    // POST /messages to trigger agent
-    await api.sendSSEMessage(props.sessionId, text)
+    closeSSE()
 
-    // Add placeholder AI message for streaming
-    const aiMessage = { role: 'ai', content: '', html: '' }
-    messages.value.push(aiMessage)
+    const aiIndex = messages.value.length
+    messages.value.push({ role: 'ai', content: '', html: '' })
 
-    // Connect to SSE stream
     const eventSource = api.streamEvents(props.sessionId)
     currentEventSource = eventSource
 
@@ -97,16 +113,15 @@ async function triggerAgent(text) {
         const data = JSON.parse(event.data)
 
         if (data.type === 'assistant.text.delta') {
-          // Append delta to current AI message
-          const delta = data.payload?.text || ''
-          aiMessage.content += delta
-          aiMessage.html = renderMarkdown(aiMessage.content)
-          scrollToBottom()
+          const delta = data.payload?.delta ?? data.payload?.text ?? ''
+          appendAiStreamDelta(aiIndex, delta)
         } else if (data.type === 'assistant.text.done') {
           const finalText = data.payload?.text
           if (finalText) {
-            aiMessage.content = finalText
-            aiMessage.html = renderMarkdown(finalText)
+            patchStreamingAiMessage(aiIndex, {
+              content: finalText,
+              html: renderMarkdown(finalText),
+            })
           }
           scrollToBottom()
         } else if (data.type === 'turn.done') {
@@ -115,8 +130,12 @@ async function triggerAgent(text) {
           emit('update:messages', messages.value)
         } else if (data.type === 'error') {
           console.error('Agent error:', data.payload)
-          if (!aiMessage.content) {
-            aiMessage.content = '抱歉，遇到了一些问题，请重试。'
+          const msg = messages.value[aiIndex]
+          if (msg && !msg.content) {
+            patchStreamingAiMessage(aiIndex, {
+              content: '抱歉，遇到了一些问题，请重试。',
+              html: renderMarkdown('抱歉，遇到了一些问题，请重试。'),
+            })
           }
           closeSSE()
           aiTyping.value = false
@@ -130,11 +149,18 @@ async function triggerAgent(text) {
     eventSource.onerror = () => {
       closeSSE()
       aiTyping.value = false
-      if (!aiMessage.content) {
-        aiMessage.content = '连接中断，请重试。'
+      const msg = messages.value[aiIndex]
+      if (msg && !msg.content) {
+        patchStreamingAiMessage(aiIndex, {
+          content: '连接中断，请重试。',
+          html: renderMarkdown('连接中断，请重试。'),
+        })
       }
       emit('update:messages', messages.value)
     }
+
+    // Trigger agent after SSE is listening so deltas are not missed
+    await api.sendSSEMessage(props.sessionId, text)
   } catch (e) {
     console.error('Failed to trigger agent:', e)
     aiTyping.value = false
