@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -60,7 +60,7 @@ async def save_repo_analysis(args: SaveRepoAnalysisArgs, ctx: ToolContext) -> To
 
     analysis.result_json = result_json
     analysis.status = "done"
-    analysis.analyzed_at = datetime.now(timezone.utc)
+    analysis.analyzed_at = datetime.now(UTC)
     await db.commit()
 
     return ToolResult.ok(

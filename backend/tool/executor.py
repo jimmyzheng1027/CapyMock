@@ -95,7 +95,7 @@ class ToolExecutor:
                         message=f"Tool {call.tool_name} was cancelled",
                         summary=f"Cancelled: {call.tool_name}",
                     )
-                except ValidationError as e:
+                except ValidationError:
                     # LLM passed invalid/empty args — return full schema as hint
                     schema = meta.args_model.model_json_schema()
                     props = schema.get("properties", {})

@@ -18,3 +18,18 @@ policy:
   max_steps: 10
   parallel_tools: 3
   tool_timeout: 30.0
+realtime:
+  provider: "dashscope_realtime"
+  model: "qwen3.5-omni-flash-realtime"
+  voice: "Cindy"  #台湾甜妹
+  vad_mode: "semantic"
+  vad_threshold: 0.5
+  transcription:
+    enabled: true
+    model: "whisper"
+  max_session_minutes: 15
+  midsummary:
+    enabled: true
+    interval_minutes: 7 #按realtime模型的最大时长调整
+    subagent_profile: "mid-summary-injector"
+    timeout_seconds: 5

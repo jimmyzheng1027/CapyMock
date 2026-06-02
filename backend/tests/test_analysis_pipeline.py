@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -123,7 +122,7 @@ class TestAnalysisStateMachine:
 
     async def test_pending_to_done(self, db: AsyncSession) -> None:
         """Analysis goes from pending → running → done with result."""
-        from api.github_analysis import create_analysis_record, complete_analysis
+        from api.github_analysis import complete_analysis, create_analysis_record
 
         analysis_id = await create_analysis_record(
             db, "https://github.com/o/r", "o", "r"

@@ -16,6 +16,7 @@ from api.schemas import (
     SessionListResponse,
     SessionMetadata,
 )
+from service.summary_utils import is_fallback_summary
 from storage.db.models import Session
 from storage.session.store import SessionStore
 
@@ -169,10 +170,18 @@ class SessionService:
         if session is None:
             raise ValueError(f"Session not found: {session_id}")
 
-        if session.status == "completed":
+        existing_summary = (
+            json.loads(session.summary) if session.summary else None
+        )
+
+        if (
+            session.status == "completed"
+            and existing_summary
+            and not is_fallback_summary(existing_summary)
+        ):
             return FinalizeResponse(
                 session_id=session_id,
-                summary=json.loads(session.summary) if session.summary else {},
+                summary=existing_summary,
             )
 
         # Update session status and summary
@@ -249,6 +258,7 @@ class SessionService:
             profile_id=session.profile_id,
             status=session.status,
             mode=session.mode,
+            resume_id=session.resume_id,
             created_at=session.created_at.isoformat(),
             updated_at=session.updated_at.isoformat(),
             last_event_ts=session.last_event_ts.isoformat() if session.last_event_ts else None,

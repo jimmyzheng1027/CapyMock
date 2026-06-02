@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import trace.observability as observability
-from config.settings import Settings
 from trace import (
     is_tracing_enabled,
     trace_agent_turn,
@@ -11,6 +10,8 @@ from trace import (
     trace_react_step,
     trace_tool,
 )
+
+from config.settings import Settings
 
 
 def _patch_settings(monkeypatch, **kwargs: str) -> None:

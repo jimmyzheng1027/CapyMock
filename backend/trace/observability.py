@@ -183,3 +183,79 @@ def tool_result_output(result: Any) -> dict[str, Any]:
 
 def span_level_for_result(result: Any) -> str:
     return "ERROR" if getattr(result, "status", "") != "ok" else "DEFAULT"
+
+
+@contextmanager
+def trace_realtime_session(
+    *,
+    session_id: str,
+    user_id: str,
+    profile_id: str = "",
+    provider: str = "",
+    model: str = "",
+    voice: str = "",
+) -> Iterator[SpanHandle]:
+    """Root span: one RealtimeAgent.run() invocation."""
+    if not is_tracing_enabled():
+        yield _NoopSpan()
+        return
+
+    from langfuse import get_client, propagate_attributes
+
+    metadata: dict[str, str] = {}
+    if profile_id:
+        metadata["profile_id"] = profile_id
+    if provider:
+        metadata["provider"] = provider
+    if model:
+        metadata["model"] = model
+    if voice:
+        metadata["voice"] = voice
+
+    with propagate_attributes(
+        session_id=session_id,
+        user_id=user_id,
+        metadata=metadata or None,
+    ):
+        with get_client().start_as_current_observation(
+            as_type="span",
+            name="realtime_session",
+            metadata=metadata or None,
+        ) as span:
+            yield span
+
+
+def record_realtime_usage(
+    span: SpanHandle,
+    audio_in_tokens: int = 0,
+    audio_out_tokens: int = 0,
+    text_in_tokens: int = 0,
+    text_out_tokens: int = 0,
+    cost_usd: float | None = None,
+) -> None:
+    """Record realtime usage metrics (called per ResponseDone)."""
+    usage: dict[str, Any] = {
+        "audio_in_tokens": audio_in_tokens,
+        "audio_out_tokens": audio_out_tokens,
+        "text_in_tokens": text_in_tokens,
+        "text_out_tokens": text_out_tokens,
+    }
+    if cost_usd is not None:
+        usage["cost_usd"] = cost_usd
+    span.update(output=usage)
+
+
+@contextmanager
+def trace_realtime_midsummary(parent_span: SpanHandle) -> Iterator[SpanHandle]:
+    """Sub-span: one MidSummary subagent invocation."""
+    if not is_tracing_enabled():
+        yield _NoopSpan()
+        return
+
+    from langfuse import get_client
+
+    with get_client().start_as_current_observation(
+        as_type="span",
+        name="realtime_midsummary",
+    ) as span:
+        yield span

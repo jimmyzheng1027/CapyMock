@@ -1,6 +1,7 @@
 from trace.observability import (
     init_tracing,
     is_tracing_enabled,
+    record_realtime_usage,
     shutdown_tracing,
     span_level_for_result,
     tool_result_output,
@@ -8,12 +9,15 @@ from trace.observability import (
     trace_compaction,
     trace_llm_call,
     trace_react_step,
+    trace_realtime_midsummary,
+    trace_realtime_session,
     trace_tool,
 )
 
 __all__ = [
     "init_tracing",
     "is_tracing_enabled",
+    "record_realtime_usage",
     "shutdown_tracing",
     "span_level_for_result",
     "tool_result_output",
@@ -21,5 +25,7 @@ __all__ = [
     "trace_compaction",
     "trace_llm_call",
     "trace_react_step",
+    "trace_realtime_midsummary",
+    "trace_realtime_session",
     "trace_tool",
 ]

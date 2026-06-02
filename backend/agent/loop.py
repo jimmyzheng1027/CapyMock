@@ -3,6 +3,15 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator, Callable
+from trace import (
+    span_level_for_result,
+    tool_result_output,
+    trace_agent_turn,
+    trace_compaction,
+    trace_llm_call,
+    trace_react_step,
+    trace_tool,
+)
 
 from agent.context.builder import ContextBuilder
 from agent.context.compactor import ContextCompactor
@@ -16,15 +25,6 @@ from agent.llm.events import (
     ToolCallEnd,
     ToolCallStart,
     Usage,
-)
-from trace import (
-    span_level_for_result,
-    tool_result_output,
-    trace_agent_turn,
-    trace_compaction,
-    trace_llm_call,
-    trace_react_step,
-    trace_tool,
 )
 from agent.profile import AgentProfile
 from agent.state import AgentState, can_transition

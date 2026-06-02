@@ -1,0 +1,15 @@
+id: "mid-summary-injector"
+prompt_template: "data/prompt/mid_summary_injector.md"
+llm:
+  provider: "mimo"
+  model: "mimo-v2.5"
+  temperature: 0.3
+tools: []
+skills: []
+context:
+  max_history_tokens: 100000
+  compact_threshold: 80000
+policy:
+  max_steps: 1
+  parallel_tools: 1
+  tool_timeout: 10.0

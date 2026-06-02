@@ -141,4 +141,14 @@ export const api = {
       method: 'POST',
     })
   },
+
+  getVoiceWebSocketUrl(sessionId, { profileId, userId = 'default', mode = 'voice' } = {}) {
+    const params = new URLSearchParams({
+      profile: profileId,
+      user_id: userId,
+      mode,
+    })
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}/ws/voice/${sessionId}?${params.toString()}`
+  },
 }

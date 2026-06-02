@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from config.settings import settings
 from storage.db.models import Base
@@ -15,6 +16,7 @@ os.makedirs(os.path.dirname(_db_path), exist_ok=True)
 engine = create_async_engine(
     f"sqlite+aiosqlite:///{_db_path.replace(os.sep, '/')}",
     echo=False,
+    poolclass=NullPool,  # Avoids "database is locked" with aiosqlite under concurrent async tasks
 )
 
 # Create async session factory

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -29,6 +29,8 @@ class Session(Base):
     summary = Column(Text, nullable=True)  # JSON string of summary dict
     resume_id = Column(String, ForeignKey("resumes.id"), nullable=True, index=True)
     github_repo_ids = Column(Text, nullable=True)  # JSON array of repo analysis IDs
+    audio_seconds_in = Column(Float, nullable=False, default=0.0)
+    audio_seconds_out = Column(Float, nullable=False, default=0.0)
 
 
 class RepoAnalysis(Base):

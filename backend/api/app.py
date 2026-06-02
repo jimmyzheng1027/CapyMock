@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from trace import init_tracing, is_tracing_enabled, shutdown_tracing
 
 from fastapi import FastAPI
 
 from agent.context.skill_loader import SkillLoader
 from agent.factory import AgentFactory
-from trace import init_tracing, is_tracing_enabled, shutdown_tracing
 from agent.profile_loader import ProfileLoader
 from api.chat import router as sse_router
 from api.github_analysis import router as analysis_router

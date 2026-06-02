@@ -98,15 +98,21 @@ class SessionStore:
         High-frequency events are only pushed, not persisted.
         Turn-level and decision-point events are always persisted.
         """
-        # Events that should NOT be persisted (high-frequency)
+        # Events that should NOT be persisted (high-frequency / audio)
         skip_types = {
             EventType.ASSISTANT_TEXT_DELTA,
             EventType.ASSISTANT_THINKING_DELTA,
             EventType.STATE_CHANGED,
+            # Audio frames are high-frequency and large - never persist
+            EventType.USER_AUDIO_CHUNK,
+            EventType.ASSISTANT_AUDIO_DELTA,
+            EventType.ASSISTANT_AUDIO_DONE,
+            # Audio transcript deltas are high-frequency
+            EventType.ASSISTANT_TRANSCRIPT_DELTA,
         }
 
         if event.type in skip_types:
             return False
 
-        # All other events are persisted
+        # All other events are persisted (including transcripts, interruptions, etc.)
         return True

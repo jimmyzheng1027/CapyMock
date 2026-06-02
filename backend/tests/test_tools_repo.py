@@ -12,8 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from storage.db.models import Base, RepoAnalysis
-from tool.base import ToolContext, ToolResult
-
+from tool.base import ToolContext
 
 # --- Fixtures ---
 
@@ -66,7 +65,7 @@ class TestListDirectory:
 
     async def test_list_root(self, ctx: ToolContext, repo_dir: Path) -> None:
         """List root directory: returns files and folders, skips pruned dirs."""
-        from tool.builtins.list_directory import list_directory, ListDirectoryArgs
+        from tool.builtins.list_directory import ListDirectoryArgs, list_directory
 
         args = ListDirectoryArgs(path=".")
         result = await list_directory(args, ctx)
@@ -85,7 +84,7 @@ class TestListDirectory:
 
     async def test_list_subdirectory(self, ctx: ToolContext) -> None:
         """List a subdirectory."""
-        from tool.builtins.list_directory import list_directory, ListDirectoryArgs
+        from tool.builtins.list_directory import ListDirectoryArgs, list_directory
 
         args = ListDirectoryArgs(path="src")
         result = await list_directory(args, ctx)
@@ -97,7 +96,7 @@ class TestListDirectory:
 
     async def test_list_sandbox_violation(self, ctx: ToolContext) -> None:
         """Path outside sandbox is rejected."""
-        from tool.builtins.list_directory import list_directory, ListDirectoryArgs
+        from tool.builtins.list_directory import ListDirectoryArgs, list_directory
 
         args = ListDirectoryArgs(path="../../etc")
         result = await list_directory(args, ctx)
@@ -107,7 +106,7 @@ class TestListDirectory:
 
     async def test_list_returns_directory_tree(self, ctx: ToolContext) -> None:
         """list_directory returns a directoryTree-compatible structure."""
-        from tool.builtins.list_directory import list_directory, ListDirectoryArgs
+        from tool.builtins.list_directory import ListDirectoryArgs, list_directory
 
         args = ListDirectoryArgs(path=".", max_depth=2)
         result = await list_directory(args, ctx)
@@ -120,7 +119,7 @@ class TestListDirectory:
 
     async def test_list_nonexistent_path(self, ctx: ToolContext) -> None:
         """Non-existent path returns error."""
-        from tool.builtins.list_directory import list_directory, ListDirectoryArgs
+        from tool.builtins.list_directory import ListDirectoryArgs, list_directory
 
         args = ListDirectoryArgs(path="nonexistent")
         result = await list_directory(args, ctx)
@@ -136,7 +135,7 @@ class TestReadFile:
 
     async def test_read_normal_file(self, ctx: ToolContext) -> None:
         """Read a normal file returns content."""
-        from tool.builtins.read_file import read_file, ReadFileArgs
+        from tool.builtins.read_file import ReadFileArgs, read_file
 
         args = ReadFileArgs(path="README.md")
         result = await read_file(args, ctx)
@@ -147,7 +146,7 @@ class TestReadFile:
 
     async def test_read_truncated(self, ctx: ToolContext, repo_dir: Path) -> None:
         """Long file is truncated."""
-        from tool.builtins.read_file import read_file, ReadFileArgs
+        from tool.builtins.read_file import ReadFileArgs, read_file
 
         long_content = "x" * 100_000
         (repo_dir / "huge.py").write_text(long_content)
@@ -161,7 +160,7 @@ class TestReadFile:
 
     async def test_read_sandbox_violation(self, ctx: ToolContext) -> None:
         """Path outside sandbox is rejected."""
-        from tool.builtins.read_file import read_file, ReadFileArgs
+        from tool.builtins.read_file import ReadFileArgs, read_file
 
         args = ReadFileArgs(path="../../etc/passwd")
         result = await read_file(args, ctx)
@@ -171,7 +170,7 @@ class TestReadFile:
 
     async def test_read_nonexistent(self, ctx: ToolContext) -> None:
         """Non-existent file returns error."""
-        from tool.builtins.read_file import read_file, ReadFileArgs
+        from tool.builtins.read_file import ReadFileArgs, read_file
 
         args = ReadFileArgs(path="nope.txt")
         result = await read_file(args, ctx)
@@ -180,7 +179,7 @@ class TestReadFile:
 
     async def test_read_empty_path_defaults_to_readme(self, ctx: ToolContext) -> None:
         """Empty path picks README.md when inside a cloned repo."""
-        from tool.builtins.read_file import read_file, ReadFileArgs
+        from tool.builtins.read_file import ReadFileArgs, read_file
         from tool.executor import ToolCall, ToolExecutor
 
         result = await read_file(ReadFileArgs(), ctx)
@@ -207,7 +206,7 @@ class TestSearchCode:
 
     async def test_search_hit(self, ctx: ToolContext) -> None:
         """Search finds matching content."""
-        from tool.builtins.search_code import search_code, SearchCodeArgs
+        from tool.builtins.search_code import SearchCodeArgs, search_code
 
         args = SearchCodeArgs(pattern="def helper")
         result = await search_code(args, ctx)
@@ -219,7 +218,7 @@ class TestSearchCode:
 
     async def test_search_no_hit(self, ctx: ToolContext) -> None:
         """Search with no matches returns zero count."""
-        from tool.builtins.search_code import search_code, SearchCodeArgs
+        from tool.builtins.search_code import SearchCodeArgs, search_code
 
         args = SearchCodeArgs(pattern="nonexistent_function_xyz")
         result = await search_code(args, ctx)
@@ -229,7 +228,7 @@ class TestSearchCode:
 
     async def test_search_sandbox_violation(self, ctx: ToolContext) -> None:
         """Search outside sandbox is rejected."""
-        from tool.builtins.search_code import search_code, SearchCodeArgs
+        from tool.builtins.search_code import SearchCodeArgs, search_code
 
         args = SearchCodeArgs(pattern="root", path="../../etc")
         result = await search_code(args, ctx)
@@ -239,7 +238,7 @@ class TestSearchCode:
 
     async def test_search_skips_pruned_dirs(self, ctx: ToolContext, repo_dir: Path) -> None:
         """Search skips .git, node_modules, etc."""
-        from tool.builtins.search_code import search_code, SearchCodeArgs
+        from tool.builtins.search_code import SearchCodeArgs, search_code
 
         # Put a match in .git that should be skipped
         (repo_dir / ".git" / "config").write_text("secret_match_123")
@@ -259,7 +258,7 @@ class TestSaveRepoAnalysis:
 
     async def test_save_sets_result_json(self, db: AsyncSession) -> None:
         """save_repo_analysis writes result_json and sets status=done."""
-        from tool.builtins.save_repo_analysis import save_repo_analysis, SaveRepoAnalysisArgs
+        from tool.builtins.save_repo_analysis import SaveRepoAnalysisArgs, save_repo_analysis
 
         # Create the row first
         analysis = RepoAnalysis(
@@ -286,7 +285,7 @@ class TestSaveRepoAnalysis:
 
     async def test_save_nonexistent(self, db: AsyncSession) -> None:
         """Saving to non-existent analysis returns error."""
-        from tool.builtins.save_repo_analysis import save_repo_analysis, SaveRepoAnalysisArgs
+        from tool.builtins.save_repo_analysis import SaveRepoAnalysisArgs, save_repo_analysis
 
         ctx = ToolContext(user_id="test-user")
         ctx.db_session = db
@@ -306,8 +305,8 @@ class TestQueryGithubAnalysis:
     async def test_query_hit(self, db: AsyncSession) -> None:
         """Query returns cached result from SQL."""
         from tool.builtins.query_github_analysis import (
-            query_github_analysis,
             QueryGithubAnalysisArgs,
+            query_github_analysis,
         )
 
         result_data = {"overview": "cached"}
@@ -334,8 +333,8 @@ class TestQueryGithubAnalysis:
     async def test_query_miss(self, db: AsyncSession) -> None:
         """Query returns not_found for missing URL."""
         from tool.builtins.query_github_analysis import (
-            query_github_analysis,
             QueryGithubAnalysisArgs,
+            query_github_analysis,
         )
 
         ctx = ToolContext(user_id="test-user")
@@ -350,8 +349,8 @@ class TestQueryGithubAnalysis:
     async def test_query_pending_returns_not_ready(self, db: AsyncSession) -> None:
         """Query for pending analysis returns not_ready error."""
         from tool.builtins.query_github_analysis import (
-            query_github_analysis,
             QueryGithubAnalysisArgs,
+            query_github_analysis,
         )
 
         analysis = RepoAnalysis(
@@ -403,7 +402,7 @@ class TestCloneRepo:
         self, local_git_repo: Path, tmp_path: Path, db: AsyncSession
     ) -> None:
         """Clone a local git repo to storage/repo/<id>/."""
-        from tool.builtins.clone_repo import clone_repo, CloneRepoArgs
+        from tool.builtins.clone_repo import CloneRepoArgs, clone_repo
 
         # Create the analysis row
         analysis = RepoAnalysis(
@@ -431,7 +430,7 @@ class TestCloneRepo:
 
     async def test_clone_invalid_url(self, db: AsyncSession, tmp_path: Path) -> None:
         """Clone with invalid URL returns error."""
-        from tool.builtins.clone_repo import clone_repo, CloneRepoArgs
+        from tool.builtins.clone_repo import CloneRepoArgs, clone_repo
 
         analysis = RepoAnalysis(
             id="ra-clone-2",

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tool.base import ToolContext, ToolResult
+from tool.base import ToolContext
 from tool.builtins.save_real_question import SaveRealQuestionArgs, save_real_question
 
 

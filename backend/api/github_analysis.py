@@ -7,7 +7,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -127,7 +127,7 @@ async def complete_analysis(
     if analysis:
         analysis.status = "done"
         analysis.result_json = json.dumps(result_data)
-        analysis.analyzed_at = datetime.now(timezone.utc)
+        analysis.analyzed_at = datetime.now(UTC)
         await db.commit()
 
 

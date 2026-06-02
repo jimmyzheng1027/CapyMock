@@ -1,11 +1,11 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/index.js'
 import CapybaraLogo from '@/components/common/CapybaraLogo.vue'
 import TextMode from '@/components/interview/TextMode.vue'
 import VoiceMode from '@/components/interview/VoiceMode.vue'
-import { INTERVIEW_TYPES, PROFILE_TO_TYPE } from '@/data/interview.js'
+import { INTERVIEW_TYPES, PROFILE_TO_TYPE, TYPE_TO_PROFILE } from '@/data/interview.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +20,7 @@ const textModeRef = ref(null)
 const voiceModeRef = ref(null)
 
 const interviewType = ref(route.query.type || 'technical')
+const profileId = computed(() => TYPE_TO_PROFILE[interviewType.value] || 'interviewer-technical')
 const sessionLoading = ref(true)
 const sessionError = ref(null)
 
@@ -124,7 +125,7 @@ onMounted(async () => {
     console.error('Session not found:', e)
   } finally {
     sessionLoading.value = false
-    if (!summary.value) {
+    if (!sessionError.value) {
       startTimer()
     }
   }
@@ -210,7 +211,8 @@ onUnmounted(() => {
         <VoiceMode
           v-else
           ref="voiceModeRef"
-          :interview-type="interviewType"
+          :session-id="interviewId"
+          :profile-id="profileId"
           :auto-start="true"
           :paused="interviewStatus === 'paused'"
         />

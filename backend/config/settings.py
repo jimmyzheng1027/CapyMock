@@ -14,9 +14,11 @@ class Settings(BaseSettings):
 
     _PROVIDER_KEY_MAP: ClassVar[dict[str, str]] = {
         "dashscope": "DASHSCOPE_API_KEY",
+        "dashscope_realtime": "DASHSCOPE_API_KEY",
         "deepseek": "DEEPSEEK_API_KEY",
         "mimo": "MIMO_API_KEY",
         "openai": "OPENAI_API_KEY",
+        "openai_realtime": "OPENAI_API_KEY",
     }
 
     def get_api_key(self, provider: str) -> str:
@@ -37,6 +39,10 @@ class Settings(BaseSettings):
     # Storage
     SQLITE_PATH: str = "storage/db/app.db"
     JSONL_ROOT: str = "storage/sessions"
+
+    # Voice / Realtime
+    VOICE_DEFAULT_SESSION_MINUTES: int = 15
+    VOICE_INACTIVITY_TIMEOUT_SECONDS: int = 300
 
     # Resume storage
     RESUME_ROOT: str = "data/resumes"

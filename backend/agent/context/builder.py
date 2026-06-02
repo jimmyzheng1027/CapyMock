@@ -136,22 +136,23 @@ class ContextBuilder:
         current_assistant_text = ""
 
         for event in events:
-            if event.type == EventType.USER_TEXT:
-                # Add user message
+            if event.type in (EventType.USER_TEXT, EventType.USER_TRANSCRIPT):
+                text = (event.payload.get("text") or "").strip()
+                if not text:
+                    continue
                 messages.append({
                     "role": "user",
-                    "content": event.payload.get("text", ""),
-                })
-            elif event.type == EventType.ASSISTANT_TEXT_DONE:
-                # Add assistant message (complete text)
-                text = event.payload.get("text", "")
-                if event.payload.get("partial", False):
-                    # Partial message - add as-is with note
-                    text += "\n[Response was interrupted]"
-                messages.append({
-                    "role": "assistant",
                     "content": text,
                 })
+            elif event.type in (EventType.ASSISTANT_TEXT_DONE, EventType.ASSISTANT_TRANSCRIPT_DONE):
+                text = event.payload.get("text", "")
+                if event.payload.get("partial", False):
+                    text += "\n[Response was interrupted]"
+                if text:
+                    messages.append({
+                        "role": "assistant",
+                        "content": text,
+                    })
             elif event.type == EventType.TOOL_RESULT:
                 # Add tool result with proper tool role
                 payload = event.payload

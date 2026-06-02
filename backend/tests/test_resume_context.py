@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from storage.db.models import Base, Resume, Session
-from tool.base import ToolContext, ToolResult
+from tool.base import ToolContext
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ class TestReadResumeSQL:
 
     async def test_read_resume_from_db(self, db: AsyncSession) -> None:
         """read_resume returns content from resume table."""
-        from tool.builtins.read_resume import read_resume, ReadResumeArgs
+        from tool.builtins.read_resume import ReadResumeArgs, read_resume
 
         resume = Resume(id="res-1", user_id="user-1", content="My resume content")
         db.add(resume)
@@ -52,7 +52,7 @@ class TestReadResumeSQL:
 
     async def test_read_resume_not_found(self, db: AsyncSession) -> None:
         """read_resume returns error for missing resume."""
-        from tool.builtins.read_resume import read_resume, ReadResumeArgs
+        from tool.builtins.read_resume import ReadResumeArgs, read_resume
 
         ctx = ToolContext(user_id="user-1")
         ctx.db_session = db
@@ -65,7 +65,7 @@ class TestReadResumeSQL:
 
     async def test_read_resume_no_user_id(self, db: AsyncSession) -> None:
         """read_resume without user_id returns error."""
-        from tool.builtins.read_resume import read_resume, ReadResumeArgs
+        from tool.builtins.read_resume import ReadResumeArgs, read_resume
 
         ctx = ToolContext(user_id="")
         ctx.db_session = db
@@ -105,7 +105,6 @@ class TestContextBuilderInjection:
         """build_messages includes resume content and memory files."""
         from agent.context.builder import ContextBuilder
         from agent.context.skill_loader import SkillLoader
-        from api.schemas import EventType, FrontendEvent
 
         skill_loader = SkillLoader(skills_dir=str(memory_root.parent / "nonexistent"))
         builder = ContextBuilder(skill_loader=skill_loader)
@@ -169,8 +168,8 @@ class TestSessionResumeId:
 
     async def test_create_session_with_resume_id(self, db: AsyncSession) -> None:
         """create_session stores resume_id in Session."""
-        from service.session_service import SessionService
         from api.schemas import CreateSessionRequest
+        from service.session_service import SessionService
         from storage.session.store import SessionStore
 
         store = MagicMock(spec=SessionStore)

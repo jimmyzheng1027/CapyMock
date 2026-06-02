@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent.llm.events import TextDelta, Usage
 from agent.llm.providers.openai_compatible import OpenAICompatibleLLM, build_multimodal_message
 
 

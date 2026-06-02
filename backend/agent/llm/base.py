@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from agent.llm.events import LLMEvent, ProviderError, TextDelta, ToolCallEnd, Usage
+from agent.llm.realtime.base import RealtimeSession
 
 
 @dataclass
@@ -68,9 +69,21 @@ class BaseLLM(ABC):
 
 
 class BaseRealtimeLLM(BaseLLM):
-    """Abstract base for Realtime LLM providers (future use)."""
+    """Abstract base for Realtime LLM providers.
+
+    Subclasses must implement realtime_connect() which returns a RealtimeSession
+    context manager providing async iteration over upstream events and outbound
+    verbs (send_audio, commit_audio, create_response, cancel_response, etc.).
+    """
 
     @abstractmethod
-    async def realtime_connect(self, **opts) -> None:
-        """Establish a realtime connection. Not implemented in this change."""
+    async def realtime_connect(
+        self,
+        instructions: str,
+        tools: list[dict],
+        voice: str,
+        vad: dict,
+        transcription: dict,
+    ) -> RealtimeSession:
+        """Establish a realtime connection and return a RealtimeSession."""
         ...

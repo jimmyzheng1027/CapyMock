@@ -35,7 +35,22 @@ class UnknownProviderError(Exception):
     pass
 
 
-# Register built-in providers
+# Register built-in text providers
 LLMFactory.register("deepseek", DeepSeekLLM)
 LLMFactory.register("dashscope", DashScopeCompatLLM)
 LLMFactory.register("mimo", MiMoLLM)
+
+# Register realtime providers
+try:
+    from agent.llm.realtime.openai_realtime import OpenAIRealtimeLLM
+
+    LLMFactory.register("openai_realtime", OpenAIRealtimeLLM)
+except ImportError:
+    pass
+
+try:
+    from agent.llm.realtime.dashscope_realtime import DashScopeRealtimeLLM
+
+    LLMFactory.register("dashscope_realtime", DashScopeRealtimeLLM)
+except ImportError:
+    pass

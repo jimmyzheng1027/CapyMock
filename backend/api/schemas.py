@@ -17,6 +17,10 @@ class EventType(str, Enum):
     ASSISTANT_TEXT_DELTA = "assistant.text.delta"
     ASSISTANT_TEXT_DONE = "assistant.text.done"
     ASSISTANT_THINKING_DELTA = "assistant.thinking.delta"
+    ASSISTANT_AUDIO_DELTA = "assistant.audio.delta"
+    ASSISTANT_AUDIO_DONE = "assistant.audio.done"
+    ASSISTANT_TRANSCRIPT_DELTA = "assistant.transcript.delta"
+    ASSISTANT_TRANSCRIPT_DONE = "assistant.transcript.done"
 
     # Tool events
     TOOL_CALL_START = "tool.call.start"
@@ -26,6 +30,7 @@ class EventType(str, Enum):
     # User events
     USER_TEXT = "user.text"
     USER_TRANSCRIPT = "user.transcript"
+    USER_AUDIO_CHUNK = "user.audio.chunk"
 
     # State events
     STATE_CHANGED = "state.changed"
@@ -34,6 +39,12 @@ class EventType(str, Enum):
     TURN_DONE = "turn.done"
     ERROR = "error"
     CONTROL_INTERRUPT = "control.interrupt"
+    CONTROL_COMMIT = "control.commit"
+
+    # Voice-specific events
+    AI_INTERRUPTED = "ai.interrupted"
+    COST_LIMIT_REACHED = "cost.limit_reached"
+    SYSTEM_CONTEXT_REFRESHED = "system.context_refreshed"
 
 
 class FrontendEvent(BaseModel):
@@ -76,6 +87,7 @@ class SessionMetadata(BaseModel):
     profile_id: str
     status: str  # active, paused, completed, abandoned
     mode: str
+    resume_id: str | None = None
     created_at: str
     updated_at: str
     last_event_ts: str | None = None
