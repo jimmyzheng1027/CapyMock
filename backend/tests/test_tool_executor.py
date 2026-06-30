@@ -1,4 +1,4 @@
-"""Tests for ToolExecutor: concurrency, timeout, isolation, cancel_token."""
+"""Tests for ToolExecutor: concurrency, timeout, isolation, cancel_token, retry, per-tool timeout."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from tool.base import ToolContext, ToolResult, tool
+from tool.base import ToolContext, ToolMeta, ToolResult, tool
 from tool.executor import ToolCall, ToolExecutor
 from tool.registry import ToolRegistry
 
@@ -41,6 +41,65 @@ async def fail_tool(args: FailArgs, ctx: ToolContext) -> ToolResult:
 async def success_tool(args: SuccessArgs, ctx: ToolContext) -> ToolResult:
     """A tool that succeeds."""
     return ToolResult.ok(data={"value": args.value}, summary="success")
+
+
+# --- Tools with per-tool timeout and retry for testing ---
+
+
+@tool(timeout=0.5)
+async def short_timeout_tool(args: SlowArgs, ctx: ToolContext) -> ToolResult:
+    """A tool with a short per-tool timeout."""
+    await asyncio.sleep(args.delay)
+    return ToolResult.ok(summary="done")
+
+
+_retry_attempts: dict[str, int] = {}
+
+
+@tool(max_retries=3)
+async def flaky_tool(args: SuccessArgs, ctx: ToolContext) -> ToolResult:
+    """A tool that fails the first 2 times, then succeeds."""
+    key = args.value
+    _retry_attempts.setdefault(key, 0)
+    _retry_attempts[key] += 1
+    if _retry_attempts[key] < 3:
+        raise TimeoutError("simulated timeout")
+    return ToolResult.ok(data={"value": args.value, "attempts": _retry_attempts[key]}, summary="ok after retries")
+
+
+@tool(max_retries=2)
+async def always_timeout_tool(args: SlowArgs, ctx: ToolContext) -> ToolResult:
+    """A tool that always times out."""
+    await asyncio.sleep(args.delay)
+    return ToolResult.ok(summary="done")
+
+
+@tool(read_only=True, timeout=5.0)
+async def readonly_tool(args: SuccessArgs, ctx: ToolContext) -> ToolResult:
+    """A read-only tool."""
+    return ToolResult.ok(data={"value": args.value}, summary="readonly ok")
+
+
+@tool(read_only=False, timeout=5.0)
+async def write_tool(args: SuccessArgs, ctx: ToolContext) -> ToolResult:
+    """A write tool."""
+    return ToolResult.ok(data={"value": args.value}, summary="write ok")
+
+
+class RequiredFieldArgs(BaseModel):
+    """Args with a required field (no default)."""
+    required_field: str  # No default → {} will trigger ValidationError
+
+
+_call_count = 0
+
+
+@tool(max_retries=3)
+async def required_field_tool(args: RequiredFieldArgs, ctx: ToolContext) -> ToolResult:
+    """A tool that requires a field with no default."""
+    global _call_count
+    _call_count += 1
+    return ToolResult.ok(summary="ok")
 
 
 class TestToolExecutor:
@@ -168,3 +227,116 @@ class TestToolExecutor:
             [], lambda c: ToolContext(), {}, parallel_limit=3
         )
         assert results == []
+
+
+class TestPerToolTimeout:
+    """Test per-tool timeout configuration."""
+
+    @pytest.mark.asyncio
+    async def test_per_tool_timeout_overrides_default(self) -> None:
+        """Test: tool-level timeout (0.5s) overrides executor default (10s)."""
+        executor = ToolExecutor(default_timeout=10.0)
+        reg = ToolRegistry(tools=[short_timeout_tool])
+        tools = {meta.name: meta for meta in reg.all()}
+
+        calls = [ToolCall(tool_call_id="1", tool_name="short_timeout_tool", args={"delay": 2.0})]
+        results = await executor.run_parallel(calls, lambda c: ToolContext(), tools)
+
+        assert len(results) == 1
+        assert results[0].status == "err"
+        assert results[0].error["code"] == "timeout"
+        assert "0.5s" in results[0].error["message"]
+
+    @pytest.mark.asyncio
+    async def test_default_timeout_when_no_per_tool(self) -> None:
+        """Test: tools without per-tool timeout use executor default."""
+        executor = ToolExecutor(default_timeout=0.5)
+        reg = ToolRegistry(tools=[slow_tool])
+        tools = {meta.name: meta for meta in reg.all()}
+
+        calls = [ToolCall(tool_call_id="1", tool_name="slow_tool", args={"delay": 2.0})]
+        results = await executor.run_parallel(calls, lambda c: ToolContext(), tools)
+
+        assert len(results) == 1
+        assert results[0].status == "err"
+        assert results[0].error["code"] == "timeout"
+
+
+class TestToolRetry:
+    """Test tool retry on timeout/network errors."""
+
+    @pytest.mark.asyncio
+    async def test_retry_on_timeout_succeeds(self) -> None:
+        """Test: tool that fails twice with timeout then succeeds on 3rd attempt."""
+        global _retry_attempts
+        _retry_attempts = {}  # Reset
+
+        executor = ToolExecutor(default_timeout=10.0)
+        reg = ToolRegistry(tools=[flaky_tool])
+        tools = {meta.name: meta for meta in reg.all()}
+
+        calls = [ToolCall(tool_call_id="1", tool_name="flaky_tool", args={"value": "test_retry"})]
+        results = await executor.run_parallel(calls, lambda c: ToolContext(), tools)
+
+        assert len(results) == 1
+        assert results[0].status == "ok"
+        assert results[0].data["attempts"] == 3
+
+    @pytest.mark.asyncio
+    async def test_retry_exhausted(self) -> None:
+        """Test: tool that always times out returns error after all retries."""
+        executor = ToolExecutor(default_timeout=0.3)
+        reg = ToolRegistry(tools=[always_timeout_tool])
+        tools = {meta.name: meta for meta in reg.all()}
+
+        calls = [ToolCall(tool_call_id="1", tool_name="always_timeout_tool", args={"delay": 5.0})]
+        results = await executor.run_parallel(calls, lambda c: ToolContext(), tools)
+
+        assert len(results) == 1
+        assert results[0].status == "err"
+        assert results[0].error["code"] == "timeout"
+        assert "2/2" in results[0].error["message"]
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_validation_error(self) -> None:
+        """Test: ValidationError is not retried even with max_retries > 1."""
+        global _call_count
+        _call_count = 0
+
+        executor = ToolExecutor(default_timeout=10.0)
+        reg = ToolRegistry(tools=[required_field_tool])
+        tools = {meta.name: meta for meta in reg.all()}
+
+        # Pass empty args to trigger ValidationError (required_field missing)
+        calls = [ToolCall(tool_call_id="1", tool_name="required_field_tool", args={})]
+        results = await executor.run_parallel(calls, lambda c: ToolContext(), tools)
+
+        assert len(results) == 1
+        assert results[0].status == "err"
+        assert results[0].error["code"] == "invalid_args"
+        assert _call_count == 0  # Tool function should never be called
+
+
+class TestReadOnlyFlag:
+    """Test read_only flag on ToolMeta."""
+
+    def test_read_only_default_false(self) -> None:
+        """Test: tools without read_only flag default to False."""
+        reg = ToolRegistry(tools=[success_tool])
+        meta = reg.get("success_tool")
+        assert meta is not None
+        assert meta.read_only is False
+
+    def test_read_only_set_true(self) -> None:
+        """Test: read_only=True is correctly stored."""
+        reg = ToolRegistry(tools=[readonly_tool])
+        meta = reg.get("readonly_tool")
+        assert meta is not None
+        assert meta.read_only is True
+
+    def test_read_only_set_false(self) -> None:
+        """Test: read_only=False is correctly stored."""
+        reg = ToolRegistry(tools=[write_tool])
+        meta = reg.get("write_tool")
+        assert meta is not None
+        assert meta.read_only is False

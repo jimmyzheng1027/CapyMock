@@ -18,7 +18,7 @@ class SaveRepoAnalysisArgs(BaseModel):
     result_json: str = ""
 
 
-@tool
+@tool(timeout=10.0, max_retries=2)
 async def save_repo_analysis(args: SaveRepoAnalysisArgs, ctx: ToolContext) -> ToolResult:
     """Save repo analysis result to the database."""
     analysis_id = args.analysis_id

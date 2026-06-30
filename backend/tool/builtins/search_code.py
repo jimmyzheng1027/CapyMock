@@ -76,7 +76,7 @@ def _search_file(file_path: Path, pattern: re.Pattern[str]) -> list[dict]:
     return matches
 
 
-@tool
+@tool(read_only=True, timeout=15.0)
 async def search_code(args: SearchCodeArgs, ctx: ToolContext) -> ToolResult:
     """Search for a pattern in source files. Skips binary/generated files."""
     err = validate_sandbox_path(args.path, ctx)

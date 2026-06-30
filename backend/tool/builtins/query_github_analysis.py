@@ -17,7 +17,7 @@ class QueryGithubAnalysisArgs(BaseModel):
     repo_url: str = ""
 
 
-@tool
+@tool(read_only=True, timeout=5.0)
 async def query_github_analysis(args: QueryGithubAnalysisArgs, ctx: ToolContext) -> ToolResult:
     """Query existing GitHub repository analysis results from the database."""
     if ctx.db_session is None:

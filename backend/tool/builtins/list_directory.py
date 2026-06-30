@@ -53,7 +53,7 @@ def _build_tree(root: Path, current: Path, depth: int, max_depth: int) -> dict:
     return {"name": current.name, "type": "folder", "children": children}
 
 
-@tool
+@tool(read_only=True, timeout=10.0)
 async def list_directory(args: ListDirectoryArgs, ctx: ToolContext) -> ToolResult:
     """List files and subdirectories at a path. Skips .git, node_modules, dist, etc."""
     err = validate_sandbox_path(args.path, ctx)

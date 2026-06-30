@@ -22,5 +22,5 @@ context:
   compact_threshold: 140000
 policy:
   max_steps: 30
-  parallel_tools: 1
+  parallel_tools: 3
   tool_timeout: 120.0

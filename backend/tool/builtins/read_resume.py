@@ -15,7 +15,7 @@ class ReadResumeArgs(BaseModel):
     resume_id: str
 
 
-@tool
+@tool(read_only=True, timeout=5.0)
 async def read_resume(args: ReadResumeArgs, ctx: ToolContext) -> ToolResult:
     """Read a user's resume by ID from the database."""
     user_id = ctx.user_id

@@ -15,7 +15,7 @@ class SaveRealQuestionArgs(BaseModel):
     source: str = "candidate"
 
 
-@tool
+@tool(timeout=10.0, max_retries=2)
 async def save_real_question(args: SaveRealQuestionArgs, ctx: ToolContext) -> ToolResult:
     """Save a real interview question mentioned by the candidate to memory.
 

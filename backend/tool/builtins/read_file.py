@@ -70,7 +70,7 @@ def _resolve_read_path(args: ReadFileArgs, ctx: ToolContext) -> tuple[str | None
     return None, False
 
 
-@tool
+@tool(read_only=True, timeout=5.0)
 async def read_file(args: ReadFileArgs, ctx: ToolContext) -> ToolResult:
     """Read a file's content from the cloned repository. Long files are truncated.
 

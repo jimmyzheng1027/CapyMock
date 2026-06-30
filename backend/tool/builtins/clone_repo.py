@@ -44,7 +44,7 @@ class CloneRepoArgs(BaseModel):
     )
 
 
-@tool
+@tool(timeout=120.0, max_retries=2)
 async def clone_repo(args: CloneRepoArgs, ctx: ToolContext) -> ToolResult:
     """Shallow clone a git repository to storage/repo/<id>/."""
     import traceback

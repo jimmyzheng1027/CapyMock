@@ -45,7 +45,7 @@ def _strip_frontmatter(content: str) -> str:
     return content
 
 
-@tool
+@tool(read_only=True, timeout=5.0)
 async def read_skill(args: ReadSkillArgs, ctx: ToolContext) -> ToolResult:
     """Load the full SKILL.md workflow for a skill ID.
 

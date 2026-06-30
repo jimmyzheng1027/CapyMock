@@ -242,7 +242,7 @@ class ReActAgent:
                 if event.stop_reason == "tool_use":
                     yield self._make_state_event(AgentState.EXECUTING_TOOLS)
                     messages.append(self._build_assistant_tool_use_message())
-                    async for msg in self._execute_tools_sequential():
+                    async for msg in self._execute_tools_hybrid():
                         if isinstance(msg, FrontendEvent):
                             yield msg
                         else:
@@ -378,65 +378,118 @@ class ReActAgent:
 
         return events
 
-    async def _execute_tools_sequential(
+    def _is_read_only_tool(self, tool_name: str) -> bool:
+        """Check if a tool is read-only (can run in parallel with other read-only tools)."""
+        meta = self.tools.get(tool_name)
+        return meta.read_only if meta else False
+
+    async def _yield_tool_events(
+        self, call: ToolCall, result: ToolResult
+    ) -> AsyncIterator[FrontendEvent | dict]:
+        """Yield frontend events and tool message for a single tool result."""
+        # Track repo_path from clone_repo results
+        if (
+            call.tool_name == "clone_repo"
+            and result.status == "ok"
+            and result.data
+        ):
+            repo_path = result.data.get("repo_path")
+            if repo_path:
+                self._current_repo_path = repo_path
+
+        yield FrontendEvent(
+            type=EventType.TOOL_CALL_END,
+            payload={
+                "tool_call_id": call.tool_call_id,
+                "tool_name": call.tool_name,
+            },
+        )
+        yield FrontendEvent(
+            type=EventType.TOOL_RESULT,
+            payload={
+                "tool_call_id": call.tool_call_id,
+                "tool_name": call.tool_name,
+                "status": result.status,
+                "data": result.data,
+                "error": result.error,
+                "summary": result.summary,
+            },
+        )
+        yield {
+            "role": "tool",
+            "tool_call_id": call.tool_call_id,
+            "content": json.dumps(
+                result.data if result.status == "ok" else result.error
+            ),
+        }
+
+    async def _execute_tools_hybrid(
         self,
     ) -> AsyncIterator[FrontendEvent | dict]:
-        """Execute tool calls one by one, yielding events and tool messages.
+        """Execute tool calls with hybrid strategy: read-only tools in parallel, write tools sequential.
 
-        Yields FrontendEvent for frontend display, and dict messages for the
-        LLM context. This ensures each tool result is visible before the next
-        tool call, so the agent can react to failures.
+        Consecutive read-only tools are grouped and executed in parallel via
+        ToolExecutor.run_parallel. Write tools are executed one at a time.
+        This balances throughput (parallel I/O) with safety (sequential writes).
         """
-        for call in self._current_tool_calls:
-            with trace_tool(name=call.tool_name, args=call.args) as tool_span:
-                batch = await self.tool_executor.run_parallel(
-                    [call],
-                    self._make_ctx_factory(),
-                    self.tools,
-                    parallel_limit=1,
-                    cancel_token=self.cancel_token,
-                )
-                result = batch[0]
-                tool_span.update(
-                    output=tool_result_output(result),
-                    level=span_level_for_result(result),
-                )
+        calls = self._current_tool_calls
+        if not calls:
+            return
 
-            # Track repo_path from clone_repo results
-            if (
-                call.tool_name == "clone_repo"
-                and result.status == "ok"
-                and result.data
+        ctx_factory = self._make_ctx_factory()
+
+        # Group consecutive read-only tools together
+        groups: list[list[ToolCall]] = []
+        for call in calls:
+            is_ro = self._is_read_only_tool(call.tool_name)
+            # Extend current group if both are read-only, otherwise start new group
+            if is_ro and groups and all(
+                self._is_read_only_tool(c.tool_name) for c in groups[-1]
             ):
-                repo_path = result.data.get("repo_path")
-                if repo_path:
-                    self._current_repo_path = repo_path
+                groups[-1].append(call)
+            else:
+                groups.append([call])
 
-            yield FrontendEvent(
-                type=EventType.TOOL_CALL_END,
-                payload={
-                    "tool_call_id": call.tool_call_id,
-                    "tool_name": call.tool_name,
-                },
-            )
-            yield FrontendEvent(
-                type=EventType.TOOL_RESULT,
-                payload={
-                    "tool_call_id": call.tool_call_id,
-                    "tool_name": call.tool_name,
-                    "status": result.status,
-                    "data": result.data,
-                    "error": result.error,
-                    "summary": result.summary,
-                },
-            )
-            yield {
-                "role": "tool",
-                "tool_call_id": call.tool_call_id,
-                "content": json.dumps(
-                    result.data if result.status == "ok" else result.error
-                ),
-            }
+        # Execute each group
+        for group in groups:
+            if len(group) == 1:
+                # Single tool: execute directly
+                call = group[0]
+                with trace_tool(name=call.tool_name, args=call.args) as tool_span:
+                    batch = await self.tool_executor.run_parallel(
+                        [call],
+                        ctx_factory,
+                        self.tools,
+                        parallel_limit=1,
+                        cancel_token=self.cancel_token,
+                    )
+                    result = batch[0]
+                    tool_span.update(
+                        output=tool_result_output(result),
+                        level=span_level_for_result(result),
+                    )
+                async for item in self._yield_tool_events(call, result):
+                    yield item
+            else:
+                # Multiple read-only tools: execute in parallel
+                with trace_tool(
+                    name=f"parallel[{','.join(c.tool_name for c in group)}]",
+                    args={"count": len(group)},
+                ) as tool_span:
+                    results = await self.tool_executor.run_parallel(
+                        group,
+                        ctx_factory,
+                        self.tools,
+                        parallel_limit=self.profile.policy.parallel_tools,
+                        cancel_token=self.cancel_token,
+                    )
+                    tool_span.update(
+                        output=f"{len(results)} tools executed",
+                        level="DEFAULT",
+                    )
+                for call, result in zip(group, results):
+                    async for item in self._yield_tool_events(call, result):
+                        yield item
 
     def _build_assistant_tool_use_message(self) -> dict:
         """Build assistant message with tool_calls for the next LLM turn."""

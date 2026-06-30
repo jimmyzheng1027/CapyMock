@@ -60,9 +60,18 @@ class ToolMeta:
     description: str
     args_model: type[BaseModel]
     fn: Callable
+    timeout: float | None = None  # per-tool timeout in seconds; None = use executor default
+    max_retries: int = 1  # max execution attempts (1 = no retry)
+    read_only: bool = False  # True for read-only tools (can run in parallel)
 
 
-def tool(fn: Callable) -> Callable:
+def tool(
+    fn: Callable | None = None,
+    *,
+    timeout: float | None = None,
+    max_retries: int = 1,
+    read_only: bool = False,
+) -> Callable:
     """Decorator to mark a function as a tool.
 
     The function must have the signature:
@@ -70,46 +79,76 @@ def tool(fn: Callable) -> Callable:
 
     The ArgsModel type hint is used to derive the JSON schema.
     The function docstring is used as the tool description.
+
+    Args:
+        timeout: Per-tool timeout in seconds. None = use executor default.
+        max_retries: Max execution attempts (1 = no retry). Retries on timeout/network errors only.
+        read_only: True for read-only tools (can run in parallel with other read-only tools).
+
+    Usage:
+        @tool
+        async def my_tool(args, ctx): ...
+
+        @tool(timeout=5.0, max_retries=2, read_only=True)
+        async def my_tool(args, ctx): ...
     """
-    import inspect
-    import typing
 
-    sig = inspect.signature(fn)
-    params = list(sig.parameters.values())
+    def _register(tool_fn: Callable) -> Callable:
+        import inspect
+        import typing
 
-    # Get the args model type from the first parameter
-    if len(params) < 2:
-        raise ToolError(f"Tool function {fn.__name__} must have at least 2 parameters (args, ctx)")
+        sig = inspect.signature(tool_fn)
+        params = list(sig.parameters.values())
 
-    args_param = params[0]
-    if args_param.annotation is inspect.Parameter.empty:
-        raise ToolError(f"Tool function {fn.__name__} must have type annotation for args parameter")
+        # Get the args model type from the first parameter
+        if len(params) < 2:
+            raise ToolError(
+                f"Tool function {tool_fn.__name__} must have at least 2 parameters (args, ctx)"
+            )
 
-    # Handle string annotations (from __future__ import annotations)
-    args_model = args_param.annotation
-    if isinstance(args_model, str):
-        # Resolve string annotation to actual type
-        hints = typing.get_type_hints(fn)
-        args_model = hints.get(args_param.name, args_param.annotation)
+        args_param = params[0]
+        if args_param.annotation is inspect.Parameter.empty:
+            raise ToolError(
+                f"Tool function {tool_fn.__name__} must have type annotation for args parameter"
+            )
 
-    if not (isinstance(args_model, type) and issubclass(args_model, BaseModel)):
-        raise ToolError(f"Tool function {fn.__name__} args parameter must be a Pydantic BaseModel")
+        # Handle string annotations (from __future__ import annotations)
+        args_model = args_param.annotation
+        if isinstance(args_model, str):
+            # Resolve string annotation to actual type
+            hints = typing.get_type_hints(tool_fn)
+            args_model = hints.get(args_param.name, args_param.annotation)
 
-    # Get description from docstring
-    description = fn.__doc__ or fn.__name__
+        if not (isinstance(args_model, type) and issubclass(args_model, BaseModel)):
+            raise ToolError(
+                f"Tool function {tool_fn.__name__} args parameter must be a Pydantic BaseModel"
+            )
 
-    # Attach metadata to the function
-    fn._tool_meta = ToolMeta(
-        name=fn.__name__,
-        description=description,
-        args_model=args_model,
-        fn=fn,
-    )
+        # Get description from docstring
+        description = tool_fn.__doc__ or tool_fn.__name__
 
-    @functools.wraps(fn)
-    async def wrapper(args: BaseModel, ctx: ToolContext) -> ToolResult:
-        return await fn(args, ctx)
+        # Attach metadata to the function
+        tool_fn._tool_meta = ToolMeta(
+            name=tool_fn.__name__,
+            description=description,
+            args_model=args_model,
+            fn=tool_fn,
+            timeout=timeout,
+            max_retries=max_retries,
+            read_only=read_only,
+        )
 
-    wrapper._tool_meta = fn._tool_meta
+        @functools.wraps(tool_fn)
+        async def wrapper(args: BaseModel, ctx: ToolContext) -> ToolResult:
+            return await tool_fn(args, ctx)
 
-    return wrapper
+        wrapper._tool_meta = tool_fn._tool_meta
+
+        return wrapper
+
+    if fn is not None:
+        # @tool without parentheses
+        return _register(fn)
+    else:
+        # @tool(...) with parameters
+        return _register
